@@ -1,0 +1,343 @@
+---
+title: "Mark-Recapture Models for Simulated Data"
+output:
+  html_document:
+    df_print: paged
+---
+
+### Introduction
+
+Mark-recapture models for analysing simulated capture history data. These models are simplified versions of the models presented in maps_models_notebook. Simplifications are:
+
+1. Single population.
+2. No spatial variance component.
+3. No residency structure.
+4. Constant capture probablity across years.
+
+#### Set working directories and load packages
+
+Only change the main directory. Rest of the directories are automatically created if they don't exist. First line removes all objects from the global environment. Comment it out if you want to keep the current objects.
+
+
+### 1. Density dependent model
+
+```{r, message=FALSE}
+
+{
+sink("dd_model_sim.jags")
+cat(
+  "model {
+    
+    # Part 1: Priors
+      
+      # Part 1.1: Priors for survival model
+      
+      survival_ad ~ dunif(0,1)
+      survival_juv <- (1-survival_ad)/fecundity
+      alpha[2] <- logit(survival_ad)
+      alpha[1] <- logit(survival_juv)
+      beta ~ dt(0,pow(10,-2),1)
+      sigma_s ~ dt(0,pow(10,-2),1)T(0,)
+      tau_s <- 1/(sigma_s^2)
+      
+      for (k in 1:npop) {
+        for (t in first_pop[k]:(nyear-1)) {
+          epsilon[k,t] ~ dnorm(0, tau_s)
+        }
+      }
+      
+      
+      # Part 1.2: Priors for capture probability model
+      
+      gamma[1] ~ dt(0,pow(10,-2),1)
+      gamma[2] ~ dt(0,pow(10,-2),1)
+      
+      # Part 1.3: Priors for fecundity model
+      
+      fecundity ~ dnorm(0,pow(10,-2))T(0,)
+      theta <- log(fecundity)
+      zeta ~ dt(0,pow(5,-2),1)
+      sigma_f ~ dt(0,pow(5,-2),1)T(0,)
+      tau_f <- 1/(sigma_f^2)
+      
+      for (l in 1:nfec) {
+        omega[l] ~ dnorm(0, tau_f)
+      }
+
+    
+    # Part 2: Robust design mark-recapture model
+      
+    for (i in 1:nind) {
+        
+      # Part 2.1: Survival process
+        
+      z[i,first[i]] ~ dbern(1)
+      
+      for (t in first[i]:(last_pop[i]-1)) {
+        phi[i,t] <- ilogit(alpha[stage[i,t]] + beta*(density[pop[i],t]-1) + epsilon[pop[i],t])
+        z[i,t+1] ~ dbern(phi[i,t]*z[i,t])
+      }#t
+      
+      # Part 2.2: Observation
+      
+      y[i,first[i],first_sub[i]] ~ dbern(1)
+      y.pred[i,first[i],first_sub[i]] ~ dbern(1)
+      
+      for(h in (first_sub[i]+1):nsub) {
+        p[i,first[i],h] <- ilogit(gamma[stage[i,first[i]]])
+        y[i,first[i],h] ~ dbern(z[i,first[i]]*p[i,first[i],h])
+        y.pred[i,first[i],h] ~ dbern(z[i,first[i]]*p[i,first[i],h])
+      }#h
+      
+      for (t in first[i]:(last_pop[i]-1)) {
+        for(h in 1:nsub) {
+          p[i,t+1,h] <- ilogit(gamma[stage[i,t+1]])
+          y[i,t+1,h] ~ dbern(z[i,t+1]*p[i,t+1,h])
+          y.pred[i,t+1,h] ~ dbern(z[i,t+1]*p[i,t+1,h])
+        }#h
+      }#t
+    }#i
+      
+    
+    # Part 3: Population size and Density Estimation
+      
+      # Part 3.1: Probability of capture per population and year
+      
+      py_a <- 1 - pow(1-ilogit(gamma[2]),4)
+      py_j <- 1 - pow(1-ilogit(gamma[1]),4)
+      
+      # Part 3.2: Density estimation
+      
+      for (k in 1:npop) {
+        for (t in first_pop[k]:nyear) {
+          Nad[k,t] <- (Nobs_ad[k,t]/py_a) + (1-py_a)/py_a
+          Njuv1[k,t] <- (Nobs_juv1[k,t]/py_j) + (1-py_j)/py_j
+      
+          ## Total population size      
+          N[k,t] <- Nad[k,t] + Njuv1[k,t]
+      
+          ## Population Density
+          density[k,t] <- N[k,t]/mean(N[k,])
+        }#t
+      }#k
+      
+    
+    # Part 4: Fecundity model
+      
+    for (l in 1:nfec) {
+      year[l] <- year.index[l]-1
+      density.fec[l] <- density[pop.index[l],year[l]]
+      Njuv2[l] <- exp(log(Nad[pop.index[l],year.index[l]]) + theta + zeta*(density.fec[l]-1) + omega[l])
+      Nobs_juv2[l] ~ dpois(max(py_j*Njuv2[l], 0.00000001))
+      Nobs_juv.pred[l] ~ dpois(max(py_j*Njuv2[l], 0.00000001))
+    }#l
+      
+    
+    # Part 5: Model Checking
+      
+      # Part 5.1: Fecundity
+      
+      for (l in 1:nfec) {
+        ft.fec.data1[l] <- ((Nobs_juv2[l]-(py_j*Njuv2[l]))^2)/(py_j*Njuv2[l])
+        ft.fec.pred1[l] <- ((Nobs_juv.pred[l]-(py_j*Njuv2[l]))^2)/(py_j*Njuv2[l])
+      }#l
+      
+      ft.fec.data2 <- sum(ft.fec.data1[])
+      ft.fec.pred2 <- sum(ft.fec.pred1[])
+      
+      pvalue.fec <- step(ft.fec.pred2-ft.fec.data2)
+      
+      # Part 5.2: Capture History
+      
+      for (i in 1:nind) {
+        ### The next two lines are adjustments for code to run
+        ### They don't affect the calculation of Freeman-Tukey statistic
+        p[i,first[i],first_sub[i]] <- 1
+        start[i] <- ifelse(first_sub[i]==nsub, nsub, first_sub[i]+1)
+      
+        ft1.data[i,first[i]] <- ifelse(first_sub[i]==nsub, 
+                                       0, 
+                                       (sqrt(sum(y[i,first[i],start[i]:nsub])) - 
+                                        sqrt(sum(p[i,first[i],start[i]:nsub])))^2)
+      
+        ft1.pred[i,first[i]] <- ifelse(first_sub[i]==nsub, 
+                                       0, 
+                                       (sqrt(sum(y.pred[i,first[i],start[i]:nsub])) - 
+                                        sqrt(sum(p[i,first[i],start[i]:nsub])))^2)
+      
+        for (t in (first[i]+1):nyear) {
+          ft1.data[i,t] <- (sqrt(sum(y[i,t,])) - sqrt(z[i,t]*sum(p[i,t,])))^2
+          ft1.pred[i,t] <- (sqrt(sum(y.pred[i,t,])) - sqrt(z[i,t]*sum(p[i,t,])))^2
+        }#t
+      
+        ft2.data[i] <- sum(ft1.data[i,first[i]:nyear])
+      
+        ft2.pred[i] <- sum(ft1.pred[i,first[i]:nyear])
+      }#i
+      
+      ft3.data <- sum(ft2.data[])
+      ft3.pred <- sum(ft2.pred[])
+      
+      pvalue.ch <- step(ft3.pred-ft3.data)
+      
+    }", fill = TRUE)
+sink()
+}
+```
+
+
+### 2. Density independent model
+
+```{r, message=FALSE}
+setwd(code_directory)
+
+{
+sink("di_model_sim.jags")
+cat(
+  "model {
+    
+    # Part 1: Priors
+      
+      # Part 1.1: Priors for survival model
+      
+      survival_ad ~ dunif(0,1)
+      survival_juv ~ dunif(0,1)
+      alpha[2] <- logit(survival_ad)
+      alpha[1] <- logit(survival_juv)
+      sigma_s ~ dt(0,pow(10,-2),1)T(0,)
+      tau_s <- 1/(sigma_s^2)
+      
+      for (k in 1:npop) {
+        for (t in first_pop[k]:(nyear-1)) {
+          epsilon[k,t] ~ dnorm(0, tau_s)
+        }
+      }
+      
+      # Part 1.2: Priors for capture probability model
+      
+      gamma[1] ~ dt(0,pow(10,-2),1)
+      gamma[2] ~ dt(0,pow(10,-2),1)
+      
+      # Part 1.3: Priors for fecundity model
+      
+      fecundity ~ dnorm(0,pow(10,-2))T(0,)
+      theta <- log(fecundity)
+      sigma_f ~ dt(0,pow(5,-2),1)T(0,)
+      tau_f <- 1/(sigma_f^2)
+      
+      for (l in 1:nfec) {
+        omega[l] ~ dnorm(0,tau_f)
+      }
+
+    
+    # Part 2: Robust design mark-recapture model
+      
+    for (i in 1:nind) {
+        
+      # Part 2.1: Survival process
+        
+      z[i,first[i]] ~ dbern(1)
+      
+      for (t in first[i]:(nyear-1)) {
+        phi[i,t] <- ilogit(alpha[stage[i,t]] + epsilon[pop[i],t])
+        z[i,t+1] ~ dbern(phi[i,t]*z[i,t])
+      }#t
+      
+      # Part 2.2: Observation
+      
+      y[i,first[i],first_sub[i]] ~ dbern(1)
+      y.pred[i,first[i],first_sub[i]] ~ dbern(1)
+      
+      for(h in (first_sub[i]+1):nsub) {
+        p[i,first[i],h] <- ilogit(gamma[stage[i,first[i]]])
+        y[i,first[i],h] ~ dbern(z[i,first[i]]*p[i,first[i],h])
+        y.pred[i,first[i],h] ~ dbern(z[i,first[i]]*p[i,first[i],h])
+      }#h
+      
+      for (t in first[i]:(nyear-1)) {
+        for(h in 1:nsub) {
+          p[i,t+1,h] <- ilogit(gamma[stage[i,t+1]])
+          y[i,t+1,h] ~ dbern(z[i,t+1]*p[i,t+1,h])
+          y.pred[i,t+1,h] ~ dbern(z[i,t+1]*p[i,t+1,h])
+        }#h
+      }#t
+    }#i
+      
+    
+    # Part 3: Population size and Density Estimation
+      
+      # Part 3.1: Probability of capture per population and year
+      
+      py_a <- 1 - pow(1-ilogit(gamma[1]),4)
+      py_j <- 1 - pow(1-ilogit(gamma[2]),4)
+      
+      # Part 3.2: Density estimation
+      for (k in 1:npop) {
+        for (t in first_pop[k]:nyear) {
+          Nad[k,t] <- (Nobs_ad[k,t]/py_a) + (1-py_a)/py_a
+          Njuv1[k,t] <- (Nobs_juv1[k,t]/py_j) + (1-py_j)/py_j
+        }#t
+      }#k
+      
+    
+    # Part 4: Fecundity model
+      
+      for (l in 1:nfec) {
+        year[l] <- year.index[l]-1
+        Njuv2[l] <- exp(log(Nad[pop.index[l],year.index[l]]) + theta + omega[l])
+        Nobs_juv2[l] ~ dpois(max(py_j*Njuv2[l], 0.00000001))
+        Nobs_juv.pred[l] ~ dpois(max(py_j*Njuv2[l], 0.00000001))
+      }#l
+      
+    
+    # Part 5: Model Checking
+      
+      # Part 5.1: Fecundity
+      
+      for (l in 1:nfec) {
+        ft.fec.data1[l] <- ((Nobs_juv2[l]-(py_j*Njuv2[l]))^2)/(py_j*Njuv2[l])
+        ft.fec.pred1[l] <- ((Nobs_juv.pred[l]-(py_j*Njuv2[l]))^2)/(py_j*Njuv2[l])
+      }#l
+      
+      ft.fec.data2 <- sum(ft.fec.data1[])
+      ft.fec.pred2 <- sum(ft.fec.pred1[])
+      
+      pvalue.fec <- step(ft.fec.pred2-ft.fec.data2)
+      
+      # Part 5.2: Capture History
+      
+      for (i in 1:nind) {
+        ### The next two lines are adjustments for code to run
+        ### They don't affect the calculation of Freeman-Tukey statistic
+        p[i,first[i],first_sub[i]] <- 1
+        start[i] <- ifelse(first_sub[i]==nsub, nsub, first_sub[i]+1)
+      
+        ft1.data[i,first[i]] <- ifelse(first_sub[i]==nsub, 
+                                       0, 
+                                       (sqrt(sum(y[i,first[i],start[i]:nsub])) - 
+                                        sqrt(sum(p[i,first[i],start[i]:nsub])))^2)
+      
+        ft1.pred[i,first[i]] <- ifelse(first_sub[i]==nsub, 
+                                       0, 
+                                       (sqrt(sum(y.pred[i,first[i],start[i]:nsub])) - 
+                                        sqrt(sum(p[i,first[i],start[i]:nsub])))^2)
+      
+        for (t in (first[i]+1):nyear) {
+          ft1.data[i,t] <- (sqrt(sum(y[i,t,])) - sqrt(z[i,t]*sum(p[i,t,])))^2
+          ft1.pred[i,t] <- (sqrt(sum(y.pred[i,t,])) - sqrt(z[i,t]*sum(p[i,t,])))^2
+        }#t
+      
+        ft2.data[i] <- sum(ft1.data[i,first[i]:nyear])
+      
+        ft2.pred[i] <- sum(ft1.pred[i,first[i]:nyear])
+      }#i
+      
+      ft3.data <- sum(ft2.data[])
+      ft3.pred <- sum(ft2.pred[])
+      
+      pvalue.ch <- step(ft3.pred-ft3.data)
+      
+    }", fill = TRUE)
+sink()
+}
+```

@@ -1,0 +1,702 @@
+---
+title: "Data Wrangling for Brown Creeper"
+output:
+  html_document:
+    df_print: paged
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(warnings = FALSE)
+```
+
+### Introduction
+
+This notebook is for wrangling Brown Creeper capture history data obtained from Montioring Avian Productivity and Survivorship (MAPS) program. It re-shapes the data into a suitable format for Bayesian mark-recapture analysis with JAGS. Data for many different species can be extracted but here we only extract data for Brown Creeper.
+
+
+#### load pakages
+
+```{r}
+rm(list=ls())
+
+library(tidyverse)
+library(foreign)
+library(geosphere)
+library(measurements)
+library(raster)
+library(foreach)
+```
+
+
+### 1. Band data
+
+The master band file ("MAPS_9208.csv") was obtained from Kevin Shoemaker's former post-doc Elizabeth Hunter. It contains data between 1992 and 2008. The master station file is from Resit Akcakaya. It contains detailed information of MAPS stations. Following changes are made to the master band data.
+
+1. Only records with "+" and "-" designations in the column "N" is used.
+2. Individuals with age code "2" or "4" is considered juveniles, the rest are adults.
+3. Inviduals with no band number are removed.
+4. Individuals that were identified as different species in different capture occasions are removed.
+
+```{r}
+
+band_data <- read.csv("MAPS_9208.csv") %>%
+  filter(N %in% c("+", "-")) %>%
+  filter(!is.na(BAND)) %>%
+  mutate(pop = as.numeric(LOC)) %>%
+  mutate(year = as.numeric(format.Date(DATE, "%Y")),
+         month = as.numeric(format.Date(DATE, "%m")),
+         day = as.numeric(format.Date(DATE, "%d"))) %>%
+  mutate_at(vars(AGE), function(x) {
+    x[x==2 | x==4] <- "J"
+    x[x!="J"] <- "A"
+    return(x)
+  }) %>%
+  dplyr::select(band = BAND,
+                spec = SPEC,
+                year = year,
+                month = month,
+                day = day,
+                age = AGE,
+                pop = pop,
+                loc = LOC, 
+                station = STATION,
+                lat = DECLAT,
+                long = DECLNG)
+  
+# Removing indviduals that was identifed as different species across different captures
+del.bands <- dplyr::select(band_data, band, spec) %>%
+  table() %>%
+  apply(., 1, FUN = function(x) length(which(x>0)))>1
+del.bands <- names(which(del.bands))
+band_data <- filter(band_data, !band %in% del.bands)
+```
+
+
+### 2. Midpoint Data
+
+Most MAPS locations consist of several stations. The geographic coordinates of a MAPS location is the geographic mid-point of these stations (the average latitude and longitude across stations). These coordinates are used for calculating geographic distances between locations. These distances in turn are used for building models with spatial auto-correlation.
+
+```{r}
+
+locations <- read.csv("station_master.csv") %>%
+  mutate_at(vars(LOC), as.character)
+
+unique_loc <- unique(band_data$loc)
+unique_pop <- unique(band_data$pop)
+midpoint <- matrix(nrow = length(unique_loc), ncol = 2)
+
+for (i in 1:length(unique_loc)) {
+  d <- filter(locations, LOC==unique_loc[i]) %>%
+    dplyr::select(DECLNG, DECLAT, LATITUDE, LONGITUDE)
+  
+  for (h in 1:nrow(d)) {
+    
+    # Convert geographic coordinates to decimal degrees again if problematic entry
+    if (d$DECLAT[h]>90 | is.na(d$DECLAT[h])) {
+      d$DECLAT[h] <- as.numeric(conv_unit(as.character(d$LATITUDE[h]), 
+                                          from = 'deg_min_sec', 
+                                          to = 'dec_deg'))
+    }
+    
+    if (d$DECLNG[h]>360 | is.na(d$DECLNG[h])) {
+      d$DECLNG[h] <- as.numeric(conv_unit(as.character(d$LONGITUDE[h]), 
+                                          from = 'deg_min_sec', 
+                                          to = 'dec_deg'))
+    }
+  }
+  
+  midpoint[i,1] <- mean(d[,1])
+  midpoint[i,2] <- mean(d[,2])
+}
+
+midpoint_data <- data.frame(loc = unique_loc, pop = unique_pop, 
+                            long = midpoint[,1], lat = midpoint[,2])
+```
+
+
+### 3. Effort Data
+
+Master effort data was also obtained from Elizabeth Hunter. Here, net hours is calculated as total hours a net was operational in a given day multiplied by a standardized net length (e.g. 12 m is 1, 6 m is 0.5). Total monthly effort is then calculated by summing net hours across all stations, days and nets, and converted to days by dividing with 24.
+
+Any letter entry in the column "N" means untrustworthy record. They are removed from the data set.
+
+```{r}
+
+effort_data <- read.dbf("MAPSEF08.DBF") %>%
+  mutate(month = as.numeric(format(DATE, "%m"))) %>%
+  rename(station = STATION,
+         year = YEAR,
+         start = START,
+         end = END,
+         length = LENGTH) %>%
+  filter(is.na(N)) %>%
+  mutate_at(vars(end, start), funs(as.character)) %>%
+  mutate_at(vars(end, start), funs(as.numeric)) %>%
+  mutate(t.hours = (end - start)/10) %>%
+  mutate(lt.hours = length*t.hours)
+
+# Most recent Band data has 1019 stations, and effort data 1024 stations.
+# Removing stations that are only in the band or effort data.
+band_data <- filter(band_data, station %in% effort_data$station)
+effort_data <- filter(effort_data, station %in% band_data$station)
+
+# add populations to effort data
+station_to_pop <- filter(band_data,!duplicated(station)) %>%
+  dplyr::select(station, pop, long, lat)
+effort_data <- left_join(effort_data, station_to_pop, by = "station")
+
+# put the sum of effort from multiple stations and nets to corresponding year-month for each population
+effort_data <- group_by(effort_data, pop, year, month) %>%
+  summarise(effort = sum(lt.hours)/24)
+```
+
+
+### 4. Weather Data
+
+Weather data is not used directly in this analysis. Here it is set up for future models which will include different weather variables. It is also used to limit this analysis to populations that has weather data, which will provide consistency with future analysis. Only weather data used for this purpose here is annual mean temperature (AMT) from the year 2008.
+
+```{r}
+
+# Change coordinate structure
+coord <- dplyr::select(station_to_pop, long, lat) %>%
+  as.matrix(.)
+coord[,1] <- coord[,1] + 360
+
+# Read in weather data. 
+# Take the average across multiple stations for each location.
+
+weather_data <- raster("AMT.asc") %>%
+  raster::extract(., y = coord) %>%
+  tapply(., station_to_pop$pop, mean, na.rm = T)
+```
+
+
+#### Save all data
+
+```{r}
+if(!"data" %in% list.files()) dir.create("data")
+
+saveRDS(band_data, file = "data/band_data.rds")
+saveRDS(effort_data, file = "data/effort_data.rds")
+saveRDS(midpoint_data, file = "data/midpoint_data.rds")
+saveRDS(weather_data, file = "data/weather_data.rds")
+```
+
+
+### 5. Functions to Re-Format Data for Mark-Recapture Analysis
+
+#### Function 1: read.rawdata
+
+Function filters the band_data and effort_data to only the breeding months (May to August), and removes all populations with less than 5 years of time series, and populations with no weather data. It also adds a "day" column to band_data with May 1 as the first day and August 31 as the 123th day. This is later used for categorizing pre-determined residents. 
+
+**spcode**: 4 letter alpha numeric code of species and subspecies as recorded in band_data.
+
+band_data, effort_data, and weather_data are previously created in this document (see above).
+
+```{r}
+read.rawdata <- function(spcode, band_data, effort_data, weather_data){
+  
+  # Subsetting the master band data by species code
+  band_data <- filter(band_data, spec == spcode) %>%
+    arrange(band, year, month)
+  
+  # Select only the breeding months (May~August)
+  band_data <- filter(band_data, month %in% c(5,6,7,8))
+  effort_data <- filter(effort_data, month %in% c(5,6,7,8)) %>%
+    # subset effort to the populations species was captured
+    filter(pop %in% band_data$pop) %>%
+    arrange(pop, year, month)
+  
+  # Reformat days as May 1-day1 and August 31-day 123
+  refdays <- function(x) {
+    if(x[1] == 5) return(x[2])
+    if(x[1] == 6) return(x[2] + 31)
+    if(x[1] == 7) return(x[2] + 61)
+    if(x[1] == 8) return(x[2] + 92)
+  }
+  band_data$day <- unlist(apply(as.matrix(band_data[,4:5]), 1, refdays))
+  
+  # Remove populations with less than 5 years of captures
+  n_trend <- tapply(band_data$year, band_data$pop, function(x) length(unique(x)))
+  pop_trend <- names(which(n_trend>4))
+  band_data <- filter(band_data, pop %in% pop_trend)
+  effort_data <- filter(effort_data, pop %in% pop_trend)
+  
+  # Subset weather data to the populations species was captured
+  unique_pop <- unique(effort_data$pop)
+  index <- which(names(weather_data) %in% unique_pop)
+  weather_data <- weather_data[index]
+  
+  # Remove populations with no weather information(Here only AMT is used)
+  index2 <- which(!is.na(weather_data))
+  pop_weather <- names(weather_data)[index2]
+  band_data <- filter(band_data, pop %in% pop_weather)
+  effort_data <- filter(effort_data, pop %in% pop_weather)
+  weather_data <- weather_data[index2]
+  
+  data <- list()
+    
+  data$bands <- band_data
+  data$effort <- effort_data
+  data$weather_data <- weather_data
+  return(data)
+  
+}
+```
+
+
+#### Function 2: format.ch
+
+**bands**: reformated bands_data as part of the list created with **read.rawdata**.
+
+Creates a robust design, and yearly capture history. The progress of the main loop is as follows:
+
+1. i goes through all unique bands. At each iteration it filters data so that only captures of the band selected at that iteration is in the data.
+2. h goes through all years. If a given year is in the filtered data, it filters the data further so that only captures from that year is in the data. If a given year is not in the filtered data all the months in that year is assigned 0.
+3. k goes through all months. If a given month is in the double filtered data 1 is assigned to the corresponding band, year and month in the capture history. If that month is not in the data 0 is assigned instead. 
+
+
+```{r}
+format.ch <- function(bands) {
+  unique_bands <- unique(bands$band)
+  years <- 1992:2008
+  months <- 5:8
+  
+  nband <- length(unique_bands)
+  nyear <- length(years)
+  nmonth <- length(months)
+  
+  # Capture history with sub-occasions
+  ch_robust <- array(dim = c(nband, nyear, nmonth),
+                     dimnames = list(unique_bands, years, months))
+  
+  for (i in 1:nband) {
+    d <- filter(bands, band==unique_bands[i])
+    for (h in 1:nyear) {
+      if (years[h] %in% d$year) {
+        d2 <- filter(d, year==years[h])
+        for (k in 1:nmonth) {
+          if (months[k] %in% d2$month) {
+            ch_robust[i,h,k] <- 1
+          } else ch_robust[i,h,k] <- 0
+        }
+      } else ch_robust[i,h,1:nmonth] <- 0
+    }
+  }
+  
+  # Capture history with only primary occasions
+  ch_year <- apply(ch_robust, c(1,2), function(y) ifelse(any(y==1, na.rm = T), 1, 0))
+  
+  results <- list(ch_robust = ch_robust,
+                  ch_year = ch_year,
+                  unique_bands = unique_bands,
+                  years = years,
+                  months = months,
+                  nband = nband,
+                  nyear = nyear,
+                  nmonth = nmonth)
+  return(results)
+}
+```
+
+
+#### Function 3: format.effort
+
+**ch**: list created with **format.ch** function.
+
+**effort**: reformated effort_data as part of the list created with **read.rawdata**
+
+Creates a robust design, and yearly effort data. The progress of the main loop is as follows:
+
+1. i goes through all unique populations. At each iteration it filters data so that remaining data is only from the population that was selected at that iteration. 
+2. h goes through all years. If a given year is in the filtered data, it filters the data further to include only that year. Also the counter for that year, "a" starts with 1. Counter is used to subset effort values from the filtered data. If a given year is not in the filtered data all the months in that year is assigned 0.
+3. k goes through all months. If a given month is in the double filtered data, effort from the corresponding population, year and month is assigned to the array, and counter is increased by 1. If that month is not in the data 0 is assigned instead.
+
+Effort data is also centered to have a mean of 0 and standard deviation of 0.5. This is useful for convergence and setting priors in Bayesian models as suggested by Andrew Gelman. 
+
+
+```{r}
+format.effort <- function(effort, ch) {
+  nyear <- ch$nyear
+  nmonth <- ch$nmonth
+  years <- ch$years
+  months <- ch$months
+  
+  unique_pop <- unique(effort$pop)
+  unique_pop <- unique_pop[order(unique_pop)]
+  npop <- length(unique_pop)
+  
+  # Effort data with sub occasions
+  effort_robust <- array(dim = c(npop, nyear, nmonth),
+                         dimnames = list(unique_pop, years, months))
+  
+  for (i in 1:npop) {
+    d <- filter(effort, pop==unique_pop[i])
+    for (h in 1:nyear) {
+      if (years[h] %in% d$year) {
+        a <- 1
+        d2 <- filter(d, year==years[h])
+        for (k in 1:nmonth) {
+          if (months[k] %in% d2$month) {
+            effort_robust[i,h,k] <- d2$effort[a]
+            a <- a + 1
+          } else effort_robust[i,h,k] <- 0
+        }
+      } else effort_robust[i,h,1:nmonth] <- 0
+    }
+  }
+  
+  # Effort data with only primary occasions
+  effort_year <- apply(effort_robust, c(1,2), sum)
+  
+  # First and last years with capture effort in a population
+  first_pop <- apply(effort_year, 1, function(x) min(which(x>0)))
+  last_pop <- apply(effort_year, 1, function(x) max(which(x>0)))
+  
+  # Centered effort data
+  ## Only data between first and last capture in a population is used
+  ## Data centered to have mean 0 and sd 0.5
+  effort_cent <- effort_robust
+  
+  for (i in 1:npop) {
+    if (first_pop[i]>1) effort_cent[i,1:(first_pop[i]-1),] <- NA
+    if (last_pop[i]<nyear) effort_cent[i,(last_pop[i]+1):nyear,] <- NA
+  }
+  
+  mean_effort <- mean(effort_cent, na.rm = T)
+  sd_effort <- sd(effort_cent, na.rm = T)
+  effort_cent <- (effort_cent - mean_effort)/(2*sd_effort)
+  
+  # Logged effort data
+  effort_log <- effort_robust
+  effort_log[effort_log==0] <- 0.001
+  effort_log <- log(effort_log)
+  
+  results <- list(effort_robust = effort_robust,
+                  effort_year = effort_year,
+                  effort_cent = effort_cent,
+                  effort_log = effort_log,
+                  unique_pop = unique_pop,
+                  first_pop = first_pop,
+                  last_pop = last_pop,
+                  npop = npop,
+                  mean_effort = mean_effort,
+                  sd_effort = sd_effort)
+  
+  return(results)
+}
+```
+
+
+#### Function 4: format.index
+
+**ch**: list created with **format.ch** function.
+
+Creates multiple indices used in mark-recapture models in jags language.
+
+1. First capture time step (prmiary occasion) of every individual.
+2. First capture sub-occasion of every individual.
+3. Last capture time step of every individual.
+4. Population number each individual belongs to in a vector and matrix form.
+
+Sone individuals are rarely captured in multiple populations. They are assigned the population they are captured most. If they are captured in equal amounts in multiple populations the population with the lowest number code is assigned. 
+
+```{r}
+format.index <- function(bands, ch, effort) {
+  ch_robust <- ch$ch_robust
+  ch_year <- ch$ch_year
+  unique_bands <- ch$unique_bands
+  nband <- ch$nband
+  nyear <- ch$nyear
+  years <- ch$years
+  npop <- effort$npop
+  
+  # first and last capture years
+  first <- apply(ch_year, 1, FUN = function(x) min(which(x==1)))
+  last <- apply(ch_year, 1, FUN = function(x) max(which(x==1)))
+  
+  # first capture month
+  detect_first_sub <- function(x) {
+    f <- min(which(x==1, arr.ind = T)[,1])
+    return(min(which(x[f,]==1)))
+  } 
+  first_sub <- apply(ch_robust, 1, detect_first_sub)
+  
+  # Population index
+  pop_array <- array(dim = c(nband, nyear),
+                     dimnames = list(unique_bands, years))
+  
+  for (i in 1:nband) {
+    pop_table <- table(filter(bands, band==unique_bands[i])$pop)
+    pop_array[i,] <- as.numeric(names(which(pop_table==max(pop_table))))[1]
+  }
+  pop <- as.factor(pop_array[,1])
+  levels(pop) <- 1:npop
+  
+  results <- list(first = first,
+                  last = last,
+                  first_sub = first_sub,
+                  pop = pop,
+                  pop_array = pop_array)
+  
+  return(results)
+}
+```
+
+
+#### Function 5: format.stage
+
+**bands**: reformated bands_data as part of the list created with **read.rawdata**.
+
+**ch**: list created with **format.ch** function.
+
+Creates a stage matrix in which each cell is the stage of an individual (1 for adults, 2 for juveniles) in a given year. The main loop works similar in logic to previous two functions.
+
+```{r}
+format.stage <- function(bands, ch) {
+  nband <- ch$nband
+  nyear <- ch$nyear
+  years <- ch$years
+  unique_bands <- ch$unique_bands
+  
+  stage_array <- array(dim = c(nband, nyear),
+                       dimnames = list(unique_bands, years))
+  
+  for (i in 1:nband) {
+    d <- filter(bands, band==unique_bands[i])
+    for (h in 1:nyear) {
+      if (years[h] %in% d$year) {
+        d2 <- filter(d, year==years[h])
+        # all stages are the same in a year so take first one
+        stage_array[i,h] <- ifelse(d2$age[1]=="A", 2, 1)
+      } else stage_array[i,h] <- NA
+    }
+  }
+  
+  age.f <- function(x) {
+    first <- which(!is.na(x))[1]
+    # every year after first capture, it's an adult
+    if(first<length(x)) x[(first+1):length(x)] <- 2
+    return(x)
+  }
+  
+  stage_array2 <- t(apply(stage_array, 1, age.f))
+  
+  return(stage_array2)
+}
+
+```
+
+
+#### Function 6: format.residents
+
+**bands**: reformated bands_data as part of the list created with **read.rawdata**.
+
+**ch**: list created with **format.ch** function.
+
+**index**: list created with **format.index** function.
+
+Categorizes individuals as a pre-determined resident (1) or a potential transient (0). If an individual is re-captured again at least once in it's first capture year at least 10 days after it's first capture it's a pre-determined resident, otherwise it's a potential transient.
+
+```{r}
+format.residents <- function(bands, ch, index) {
+  nband <- ch$nband
+  nyear <- ch$nyear
+  years <- ch$years
+  unique_bands <- ch$unique_bands
+  first <- index$first
+  
+  residents <- vector(mode = "numeric", length = nband)
+  for (i in 1:nband) {
+    d <- filter(bands, band==unique_bands[i] & year==years[first[i]])
+    residents[i] <- ifelse((max(d$day)-min(d$day))>=10, 1, 0)
+  }
+  
+  return(residents)
+}
+```
+
+
+#### Function 7: format.Nobs
+
+**ch**: list created with **format.ch** function.
+
+**stage**: stage matrix created with **format.stage**.
+
+**index**: list created with **format.index** function.
+
+**effort**: List created with **format.effort** function.
+
+Counts the number of captured individuals in each population in each year. 
+
+```{r}
+format.Nobs <- function(effort, ch, stage, index) {
+  ch_year <- ch$ch_year
+  nyear <- ch$nyear
+  years <- ch$years
+  unique_pop <- effort$unique_pop
+  npop <- effort$npop
+  pop_array <- index$pop_array
+  
+  stage_ad <- stage
+  stage_ad[stage_ad==1] <- 0
+  stage_ad[is.na(stage_ad)] <- 0
+  
+  stage_juv <- stage
+  stage_juv[stage_juv==2] <- 0
+  stage_juv[stage_juv==1] <- 1
+  stage_juv[is.na(stage_juv)] <- 0
+  
+  Nobs_ad <- array(dim = c(npop, nyear),
+                   dimnames = list(unique_pop, years))
+  
+  Nobs_juv <- array(dim = c(npop, nyear),
+                    dimnames = list(unique_pop, years))
+  
+  for (i in 1:npop) {
+    pop <- pop_array
+    pop[pop!=unique_pop[i]] <- 0
+    pop[pop==unique_pop[i]] <- 1
+    
+    ab_adult <- pop*ch_year*stage_ad
+    ab_adult <- apply(ab_adult, 2, sum)
+    Nobs_ad[i,] <- ab_adult
+    
+    ab_juv <- pop*ch_year*stage_juv
+    ab_juv <- apply(ab_juv, 2, sum)
+    Nobs_juv[i,] <- ab_juv
+  }
+  
+  results <- list(Nobs_ad = Nobs_ad,
+                  Nobs_juv = Nobs_juv)
+  
+  return(results)
+}
+```
+
+
+#### Function 8: format.fec
+
+**Nobs**: List created with **format.Nobs** function.
+
+**effort**: List created with **format.effort** function.
+
+Creates data for fecundity analysis. Filters data to populations and years with at least 1 adult and 1 juvenile capture. Also removes first year of capture in every population. That is because fecundity models use density from the previous year, and no such information is available for first year data.
+
+```{r}
+format.fec <- function(effort, Nobs) {
+  Nobs_ad <- Nobs$Nobs_ad
+  Nobs_juv <- Nobs$Nobs_juv
+  first_pop <- effort$first_pop
+  npop <- effort$npop
+  
+  # Assign 0 population size to first capture year 
+  for (i in 1:npop) {
+    Nobs_ad[i,first_pop[i]] <- 0
+    Nobs_juv[i,first_pop[i]] <- 0
+  }
+  
+  # Population and year indices for fecundity data
+  pop_index1 <- which(Nobs_ad>0 & Nobs_juv>0, arr.ind = T)[,1]
+  year_index1 <- which(Nobs_ad>0 & Nobs_juv>0, arr.ind = T)[,2]
+  
+  pop_index2 <- which(Nobs_ad>4, arr.ind = T)[,1]
+  year_index2 <- which(Nobs_ad>4, arr.ind = T)[,2]
+  
+  # Fecundity data used in mark-recapture models.
+  fec_data1 <- Nobs_juv[which(Nobs_ad>0 & Nobs_juv>0)]
+  fec_data2 <- Nobs_juv[which(Nobs_ad>4)]
+  
+  results <- list(fec_data1 = fec_data1,
+                  pop_index1 = pop_index1,
+                  year_index1 = year_index1,
+                  fec_data2 = fec_data2,
+                  pop_index2 = pop_index2,
+                  year_index2 = year_index2,
+                  nfec1 = length(fec_data1),
+                  nfec2 = length(fec_data2))
+  
+  return(results)
+}
+```
+
+
+#### Function 9: wrap.chdata
+
+See function 1 for function arguments.
+
+A wrapper function for functions 1 to 8. Formats the data to it's final form for mark-recapture analysis. Latent_state object is used to fasten the bayesian mark-recapture models in jags language. It sets the latent state of every individual to 1 between their first and last capture events. Their first year capture and time steps after the last capture year is set to NA. This way model does not try to estimate the state of individuals between their first and last capture years, which makes sense because we know they are alive in that time period.
+
+
+```{r}
+wrap.chdata <- function(spcode, band_data, effort_data, weather_data) {
+  
+  rawdata <- read.rawdata(spcode, band_data, effort_data, weather_data)
+  ch <- format.ch(rawdata$bands)
+  effort <- format.effort(rawdata$effort, ch)
+  index <- format.index(rawdata$bands, ch, effort)
+  stage <- format.stage(rawdata$bands, ch)
+  residents <- format.residents(rawdata$bands, ch, index)
+  Nobs <- format.Nobs(effort, ch, stage, index)
+  fec <- format.fec(effort, Nobs)
+  
+  # Latent state set up
+  latent_state <- ch$ch_year  
+  for (i in 1:nrow(ch$ch_year)) {
+    n1 <- min(which(ch$ch_year[i,]==1))
+    n2 <- max(which(ch$ch_year[i,]==1))
+    latent_state[i, n1:n2] <- 1
+    latent_state[i, n1] <- NA 
+  }
+  latent_state[latent_state==0] <- NA
+  
+  results <- list()
+  results$ch_robust <- ch$ch_robust
+  results$ch_year <- ch$ch_year
+  results$latent_state <- latent_state
+  results$stage <- stage
+  results$effort_cent <- effort$effort_cent
+  results$effort_year <- effort$effort_year
+  results$effort_log <- effort$effort_log
+  results$residents <- residents
+  results$first <- index$first
+  results$last <- index$last
+  results$first_sub <- index$first_sub
+  results$first_pop <- effort$first_pop
+  results$last_pop <- effort$last_pop
+  results$pop <- index$pop
+  results$Nobs_ad <- Nobs$Nobs_ad
+  results$Nobs_juv <- Nobs$Nobs_juv
+  results$fec_data1 <- fec$fec_data1
+  results$pop_index1 <- fec$pop_index1
+  results$year_index1 <- fec$year_index1
+  results$fec_data2 <- fec$fec_data2
+  results$pop_index2 <- fec$pop_index2
+  results$year_index2 <- fec$year_index2
+  results$nyear <- ch$nyear
+  results$nind <- ch$nband
+  results$npop <- effort$npop
+  results$nfec1 <- fec$nfec1
+  results$nfec2 <- fec$nfec2
+  results$mean_effort <- effort$mean_effort
+  results$sd_effort <- effort$sd_effort
+  results$weather <- rawdata$weather_data
+  
+  return(results)
+}
+```
+
+
+### 6. Wrangle Brown Creeper Data
+
+```{r}
+spcode <- "BRCR"
+chdata <- wrap.chdata(spcode, band_data, effort_data, weather_data)
+
+saveRDS(chdata, file = "data/BRCR_chdata.rds")
+```
+
+
+
+
+
