@@ -1,4 +1,4 @@
-# Integrated Recapture Models (IRMs)
+# CJS-pop
 
 This document explains the R scripts used in Şen and Akçakaya (2019), which describes CJS-pop, applies it to simulated and MAPS data, and uses the estimated parameters for population projections. 
 
