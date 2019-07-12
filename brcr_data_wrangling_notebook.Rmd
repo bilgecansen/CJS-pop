@@ -176,10 +176,10 @@ weather_data <- raster("AMT.asc") %>%
 ```{r}
 if(!"data" %in% list.files()) dir.create("data")
 
-saveRDS(band_data, file = "data/band_data.rds")
-saveRDS(effort_data, file = "data/effort_data.rds")
-saveRDS(midpoint_data, file = "data/midpoint_data.rds")
-saveRDS(weather_data, file = "data/weather_data.rds")
+saveRDS(band_data, file = "band_data.rds")
+saveRDS(effort_data, file = "effort_data.rds")
+saveRDS(midpoint_data, file = "midpoint_data.rds")
+saveRDS(weather_data, file = "weather_data.rds")
 ```
 
 
@@ -540,11 +540,11 @@ format.Nobs <- function(effort, ch, stage, index) {
   
   stage_ad <- stage
   stage_ad[stage_ad==1] <- 0
+  stage_ad[stage_ad==2] <- 1
   stage_ad[is.na(stage_ad)] <- 0
   
   stage_juv <- stage
   stage_juv[stage_juv==2] <- 0
-  stage_juv[stage_juv==1] <- 1
   stage_juv[is.na(stage_juv)] <- 0
   
   Nobs_ad <- array(dim = c(npop, nyear),
@@ -600,12 +600,12 @@ format.fec <- function(effort, Nobs) {
   pop_index1 <- which(Nobs_ad>0 & Nobs_juv>0, arr.ind = T)[,1]
   year_index1 <- which(Nobs_ad>0 & Nobs_juv>0, arr.ind = T)[,2]
   
-  pop_index2 <- which(Nobs_ad>4, arr.ind = T)[,1]
-  year_index2 <- which(Nobs_ad>4, arr.ind = T)[,2]
+  pop_index2 <- which(Nobs_ad>0, arr.ind = T)[,1]
+  year_index2 <- which(Nobs_ad>0, arr.ind = T)[,2]
   
   # Fecundity data used in mark-recapture models.
   fec_data1 <- Nobs_juv[which(Nobs_ad>0 & Nobs_juv>0)]
-  fec_data2 <- Nobs_juv[which(Nobs_ad>4)]
+  fec_data2 <- Nobs_juv[which(Nobs_ad>0)]
   
   results <- list(fec_data1 = fec_data1,
                   pop_index1 = pop_index1,
@@ -693,7 +693,7 @@ wrap.chdata <- function(spcode, band_data, effort_data, weather_data) {
 spcode <- "BRCR"
 chdata <- wrap.chdata(spcode, band_data, effort_data, weather_data)
 
-saveRDS(chdata, file = "data/BRCR_chdata.rds")
+saveRDS(chdata, file = "BRCR_chdata.rds")
 ```
 
 
