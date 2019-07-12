@@ -78,21 +78,29 @@ sink("dd_model_r.jags")
         rho[2] ~ dunif(0,1)
 
       # Part 2: Robust design mark-recapture model
+      
+        # Part 2.1: Survival constraints
+
+        for (k in 1:npop) {
+          for (t in first_pop[k]:(last_pop[k]-1)) {
+            phi[1,k,t] <- ilogit(alpha[1] + beta*(density[k,t]-1) + epsilon[t])
+            phi[2,k,t] <- ilogit(alpha[2] + beta*(density[k,t]-1) + epsilon[t])
+          }#k
+        }#t
 
       for (i in 1:nind) {
 
-        # Part 2.1: Residency Process
+        # Part 2.2: Residency Process
 
         R[i] ~ dbern(pi[stage[i,first[i]]])
         r[i] ~ dbern(R[i]*rho[stage[i,first[i]]])
 
-        # Part 2.2: Survival Process
+        # Part 2.3: Survival Process
         
         z[i,first[i]] ~ dbern(1)
       
         for (t in first[i]:(last_pop[pop[i]]-1)) {
-          phi[i,t] <- ilogit(alpha[stage[i,t]] + beta*(density[pop[i],t]-1) + epsilon[t])
-          z[i,t+1] ~ dbern(phi[i,t]*z[i,t]*R[i])
+          z[i,t+1] ~ dbern(phi[stage[i,t],pop[i],t]*z[i,t]*R[i])
         }#t
       
         # Part 2.3: Observation Process
@@ -269,18 +277,26 @@ sink("dd_model.jags")
 
       # Part 2: Robust design mark-recapture model
 
+        # Part 2.1: Survival constraints
+
+          for (k in 1:npop) {
+            for (t in first_pop[k]:(last_pop[k]-1)) {
+              phi[1,k,t] <- ilogit(alpha[1] + beta*(density[k,t]-1) + epsilon[t])
+              phi[2,k,t] <- ilogit(alpha[2] + beta*(density[k,t]-1) + epsilon[t])
+            }#k
+          }#t
+
       for (i in 1:nind) {
 
-        # Part 2.1: Survival Process
+        # Part 2.2: Survival Process
         
         z[i,first[i]] ~ dbern(1)
       
         for (t in first[i]:(last_pop[pop[i]]-1)) {
-          phi[i,t] <- ilogit(alpha[stage[i,t]] + beta*(density[pop[i],t]-1) + epsilon[t])
-          z[i,t+1] ~ dbern(phi[i,t]*z[i,t])
+          z[i,t+1] ~ dbern(phi[stage[i,t],pop[i],t]*z[i,t])
         }#t
       
-        # Part 2.2: Observation Process
+        # Part 2.3: Observation Process
         
         y[i,first[i],first_sub[i]] ~ dbern(1)
         y_pred[i,first[i],first_sub[i]] ~ dbern(1)
@@ -505,6 +521,11 @@ sink("di_model_r.jags")
                               (1-ilogit(gamma[2] + delta*effort[k,t,2]))*
                               (1-ilogit(gamma[2] + delta*effort[k,t,3]))*
                               (1-ilogit(gamma[2] + delta*effort[k,t,4])))
+
+            py_j[k,t] <- 1 - ((1-ilogit(gamma[1] + delta*effort[k,t,1]))*
+                              (1-ilogit(gamma[1] + delta*effort[k,t,2]))*
+                              (1-ilogit(gamma[1] + delta*effort[k,t,3]))*
+                              (1-ilogit(gamma[1] + delta*effort[k,t,4])))
           }#t
         }#k
 

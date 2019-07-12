@@ -1,5 +1,5 @@
 
-# IRMs for Brown Creeper MAPS data
+# CJS-pop for Brown Creeper MAPS data
 
 ## See brcr_models_notebook for extended notes on model structure.
 
@@ -133,4 +133,4 @@ system.time({
 stopCluster(cl)
 
 if (!"results" %in% list.files()) dir.create("results")
-saveRDS(results, file = "results/BRCR_results.rds")
+saveRDS(results, file = "BRCR_results.rds")
