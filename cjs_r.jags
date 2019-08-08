@@ -1,0 +1,100 @@
+
+      model {
+      
+      # Part 1: Priors
+      
+        # Part 1.1: Priors for survival model
+
+        survival_ad ~ dunif(0,1)
+        survival_juv ~ dunif(0,1)
+        alpha[2] <- logit(survival_ad)
+        alpha[1] <- logit(survival_juv)
+        sigma_s ~ dt(0,pow(10,-2),1)T(0,)
+        tau_s <- 1/(sigma_s^2)
+
+        for (t in 1:(nyear-1)) {
+          epsilon[t] ~ dnorm(0, tau_s)
+        }
+
+        # Part 1.2: Priors for capture porbablity model
+
+        gamma[1] ~ dt(0,pow(10,-2),1)
+        gamma[2] ~ dt(0,pow(10,-2),1)
+        delta ~ dt(0,pow(2.5,-2),1)
+        
+        # Part 1.3: Priors for residency model
+      
+        pi[1] ~ dunif(0,1)
+        pi[2] ~ dunif(0,1)
+        rho[1] ~ dunif(0,1)
+        rho[2] ~ dunif(0,1)
+
+      # Part 2: Robust design mark-recapture model
+
+      for (i in 1:nind) {
+
+        # Part 2.1: Residency Process
+
+        R[i] ~ dbern(pi[stage[i,first[i]]])
+        r[i] ~ dbern(R[i]*rho[stage[i,first[i]]])
+
+        # Part 2.2: Survival Process
+        
+        z[i,first[i]] ~ dbern(1)
+      
+        for (t in first[i]:(last_pop[pop[i]]-1)) {
+          phi[i,t] <- ilogit(alpha[stage[i,t]] + epsilon[t])
+          z[i,t+1] ~ dbern(phi[i,t]*z[i,t]*R[i])
+        }#t
+      
+        # Part 2.3: Observation Process
+        
+        y[i,first[i],first_sub[i]] ~ dbern(1)
+        y_pred[i,first[i],first_sub[i]] ~ dbern(1)
+      
+        for(h in (first_sub[i]+1):nsub) {
+          p[i,first[i],h] <- ilogit(gamma[stage[i,first[i]]] + delta*effort[pop[i],first[i],h])
+          y[i,first[i],h] ~ dbern(z[i,first[i]]*p[i,first[i],h])
+          y_pred[i,first[i],h] ~ dbern(z[i,first[i]]*p[i,first[i],h])
+        }#h
+      
+        for (t in first[i]:(last_pop[pop[i]]-1)) {
+          for(h in 1:nsub) {
+            p[i,t+1,h] <- ilogit(gamma[stage[i,t+1]] + delta*effort[pop[i],t+1,h])
+            y[i,t+1,h] ~ dbern(z[i,t+1]*p[i,t+1,h])
+            y_pred[i,t+1,h] ~ dbern(z[i,t+1]*p[i,t+1,h])
+          }#h
+        }#t
+      }#i
+      
+      # Part 3: Model Checking
+      
+        for (i in 1:nind) {
+          ### The next two lines are adjustments for code to run
+          ### They don't affect the calculation of Freeman-Tukey statistic
+          p[i,first[i],first_sub[i]] <- 1
+          start[i] <- ifelse(first_sub[i]==nsub, nsub, first_sub[i]+1)
+      
+          ts[i] <- (sqrt(sum(y[i,first[i],start[i]:nsub])) - 
+                    sqrt(sum(p[i,first[i],start[i]:nsub])))^2
+          ft1_data[i,first[i]] <- ifelse(first_sub[i]==nsub, 0, ts[i])
+      
+          ts_pred[i] <- (sqrt(sum(y_pred[i,first[i],start[i]:nsub])) - 
+                         sqrt(sum(p[i,first[i],start[i]:nsub])))^2
+          ft1_pred[i,first[i]] <- ifelse(first_sub[i]==nsub, 0, ts_pred[i])
+      
+          for (t in (first[i]+1):(last_pop[pop[i]])) {
+            ft1_data[i,t] <- (sqrt(sum(y[i,t,])) - sqrt(z[i,t]*sum(p[i,t,])))^2
+            ft1_pred[i,t] <- (sqrt(sum(y_pred[i,t,])) - sqrt(z[i,t]*sum(p[i,t,])))^2
+          }#t
+      
+          ft2_data[i] <- sum(ft1_data[i,first[i]:last_pop[pop[i]]])
+          ft2_pred[i] <- sum(ft1_pred[i,first[i]:last_pop[pop[i]]])
+      }#i
+      
+      ft3_data <- sum(ft2_data[])
+      ft3_pred <- sum(ft2_pred[])
+      
+      pvalue_ch <- step(ft3_pred-ft3_data)
+      
+      }

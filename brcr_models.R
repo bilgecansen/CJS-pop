@@ -9,7 +9,7 @@ rm(list = ls())
 
 # Models used in this script
 
-models <- c("dd_model_r.jags", "dd_model.jags", "di_model_r.jags", "cjs_r.jags")
+models <- c("cjspop.jags", "cjspop_nores.jags", "cjspop_di.jags", "cjs_r.jags")
 
 ## Code uses parallel computing. 
 ## set cores to 1 if not sure about the number of cores 
@@ -32,15 +32,14 @@ nt <- 20
 
 # Load packages -----------------------------------------------------------
 
-library(doSNOW)
-library(foreach)
-library(rjags)
-library(R2jags)
+if ("pacman" %in% rownames(installed.packages())==F) 
+  install.packages("pacman", repos = "http://cran.rstudio.com/")
+pacman::p_load(snow, doSNOW, foreach, rjags, R2jags)
 
 
 # Load data and set up jags functions -------------------------------------
 
-chdata <- readRDS("data/BRCR_chdata.rds")
+chdata <- readRDS("BRCR_chdata.rds")
 
 # ch.init function initilizes values for the latent state z, using the latent_state matrix (see
 # data_generation notebook for the creation of this matrix). NA values in the latent state is given
@@ -62,15 +61,15 @@ jags.func <- function(model, chdata, ni, nb, nc, nt) {
   
   init.func <- function() {
     list(survival_ad = runif(1,0,1),
-         beta = rnorm(1,0,10),
+         beta = rnorm(1,0,3),
          gamma = rnorm(2,0,10),
          delta = rnorm(1,0,2.5),
          fecundity = runif(1,1,10),
-         zeta = rnorm(1,0,5),
+         zeta = rnorm(1,0,3),
          pi = runif(2,0,1),
          rho = runif(2,0,1),
-         sigma_s = runif(1,0,5),
-         sigma_f = runif(1,0,5),
+         sigma_s = runif(1,0,3),
+         sigma_f = runif(1,0,3),
          psi = runif(1,0,1),
          R = rep(1, nrow(chdata$stage)),
          z = ch.init(chdata$latent_state, chdata$first, 
@@ -125,12 +124,10 @@ registerDoSNOW(cl)
 
 system.time({
   results <- foreach(i=1:length(models), .packages = c("rjags", "R2jags")) %dopar% {
-    setwd(code_directory)
     jags.func(models[i], chdata, ni = ni, nb = nb, nc = nc, nt = nt)
   }
 })
 
 stopCluster(cl)
 
-if (!"results" %in% list.files()) dir.create("results")
 saveRDS(results, file = "BRCR_results.rds")

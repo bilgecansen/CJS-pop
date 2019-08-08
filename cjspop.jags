@@ -1,0 +1,204 @@
+
+      model {
+      
+      # Part 1: Priors
+      
+        # Part 1.1: Priors for survival model
+
+        survival_ad ~ dunif(0,1)
+        survival_juv <- (1-survival_ad)/fecundity
+        alpha_rev[1] <- logit(survival_ad)
+        alpha_rev[2] <- logit(survival_juv)
+        beta ~ dt(0,pow(10,-2),1)
+        sigma_s ~ dt(0,pow(10,-2),1)T(0,)
+        tau_s <- 1/(sigma_s^2)
+
+        for (t in 1:(nyear-1)) {
+          epsilon[t] ~ dnorm(0, tau_s)
+        }
+
+        # Part 1.2: Priors for capture porbablity model
+
+        gamma_rev[1] ~ dt(0,pow(10,-2),1)
+        gamma_rev[2] ~ dt(0,pow(10,-2),1)
+        delta ~ dt(0,pow(2.5,-2),1)
+      
+        # Part 1.3: Priors for fecundity model
+
+        fecundity ~ dnorm(0,pow(10,-2))T(0,)
+        theta <- log(fecundity)
+        zeta ~ dt(0,pow(5,-2),1)
+        sigma_f ~ dt(0,pow(5,-2),1)T(0,)
+        tau_f <- 1/(sigma_f^2)
+        psi ~ dunif(0,1)
+
+        for (l in 1:nfec) {
+          omega[l] ~ dnorm(0, tau_f)
+        }
+        
+        # Part 1.4: Priors for residency model
+      
+        pi_rev[1] ~ dunif(0,1)
+        pi_rev[2] ~ dunif(0,1)
+        rho_rev[1] ~ dunif(0,1)
+        rho_rev[2] ~ dunif(0,1)
+
+        # Part 1.5: Setting up reverse subsetting. See above text for explanation.
+        
+        alpha[1] <- alpha_rev[2]
+        alpha[2] <- alpha_rev[1]
+        gamma[1] <- gamma_rev[2]
+        gamma[2] <- gamma_rev[1]
+        pi[1] <- pi_rev[2]
+        pi[2] <- pi_rev[1]
+        rho[1] <- rho_rev[2]
+        rho[2] <- rho_rev[1]
+
+
+      # Part 2: Robust design mark-recapture model
+
+        # Part 2.1: Survival constraints
+ 
+        for (k in 1:npop) {
+          for (t in first_pop[k]:(last_pop[k]-1)) {
+            phi[1,k,t] <- ilogit(alpha[1] + beta*(density[k,t]-1) + epsilon[t])
+            phi[2,k,t] <- ilogit(alpha[2] + beta*(density[k,t]-1) + epsilon[t])
+          }#k
+        }#t
+
+      for (i in 1:nind) {
+
+        # Part 2.2: Residency Process
+
+        R[i] ~ dbern(pi[stage[i,first[i]]])
+        r[i] ~ dbern(R[i]*rho[stage[i,first[i]]])
+
+        # Part 2.3: Survival Process
+        
+        z[i,first[i]] ~ dbern(1)
+      
+        for (t in first[i]:(last_pop[pop[i]]-1)) {
+          z[i,t+1] ~ dbern(phi[stage[i,t],pop[i],t]*z[i,t]*R[i])
+        }#t
+      
+        # Part 2.4: Observation Process
+        
+        y[i,first[i],first_sub[i]] ~ dbern(1)
+        y_pred[i,first[i],first_sub[i]] ~ dbern(1)
+      
+        for(h in (first_sub[i]+1):nsub) {
+          p[i,first[i],h] <- ilogit(gamma[stage[i,first[i]]] + delta*effort[pop[i],first[i],h])
+          y[i,first[i],h] ~ dbern(z[i,first[i]]*p[i,first[i],h])
+          y_pred[i,first[i],h] ~ dbern(z[i,first[i]]*p[i,first[i],h])
+        }#h
+      
+        for (t in first[i]:(last_pop[pop[i]]-1)) {
+          for(h in 1:nsub) {
+            p[i,t+1,h] <- ilogit(gamma[stage[i,t+1]] + delta*effort[pop[i],t+1,h])
+            y[i,t+1,h] ~ dbern(z[i,t+1]*p[i,t+1,h])
+            y_pred[i,t+1,h] ~ dbern(z[i,t+1]*p[i,t+1,h])
+          }#h
+        }#t
+      }#i
+      
+      # Part 3: Population size and Density Estimation
+      
+        # Part 3.1: Probability of capture per population and year
+        
+        for (k in 1:npop) {
+          for (t in first_pop[k]:last_pop[k]) {
+            py_j[k,t] <- 1 - ((1-ilogit(gamma[1] + delta*effort[k,t,1]))*
+                              (1-ilogit(gamma[1] + delta*effort[k,t,2]))*
+                              (1-ilogit(gamma[1] + delta*effort[k,t,3]))*
+                              (1-ilogit(gamma[1] + delta*effort[k,t,4])))
+      
+            py_a[k,t] <- 1 - ((1-ilogit(gamma[2] + delta*effort[k,t,1]))*
+                              (1-ilogit(gamma[2] + delta*effort[k,t,2]))*
+                              (1-ilogit(gamma[2] + delta*effort[k,t,3]))*
+                              (1-ilogit(gamma[2] + delta*effort[k,t,4])))
+          }#t
+        }#k
+
+        # Part 3.2: Density estimation
+        
+        for (k in 1:npop) {
+          for (t in first_pop[k]:last_pop[k]) {
+            Nad[k,t] <- Nobs_ad[k,t]/py_a[k,t] + (1-py_a[k,t])/py_a[k,t]
+            Njuv1[k,t] <- Nobs_juv1[k,t]/py_j[k,t] + (1-py_j[k,t])/py_j[k,t]
+      
+            ## Total population size      
+            N_temp[k,t] <- Nad[k,t] + Njuv1[k,t]
+            N[k,t] <- ifelse(effort_year[k,t]==0, 0, N_temp[k,t])
+      
+            ## Count the number of years without effort in a population. 
+            ## This is used for calculating mean pop size.
+            n1[k,t] <- equals(effort_year[k,t], 0)
+      
+            ## Population Density (Assign 1 if there is no effort)
+            density[k,t] <- ifelse(effort_year[k,t]==0, 1, N[k,t]/mean.N[k])
+          }#t
+      
+          ## Counting the number of populations with effort across study period
+          n2[k] <- (last_pop[k] - first_pop[k] + 1) - sum(n1[k,first_pop[k]:last_pop[k]])
+      
+          ## Mean pop size of effort years
+          mean.N[k] <- sum(N[k,first_pop[k]:last_pop[k]])/n2[k]
+        }#k
+      
+      # Part 4: Fecundity model
+      
+      for (l in 1:nfec) {
+        year[l] <- year_index[l]-1
+        density_fec[l] <- density[pop_index[l],year[l]]
+        Njuv2[l] <- exp(log(Nad[pop_index[l],year_index[l]]) + theta + zeta*(density_fec[l]-1) + 
+                        omega[l])
+        w[l] ~ dbern(psi)
+        Nobs_juv2[l] ~ dpois(max(py_j[pop_index[l],year_index[l]]*Njuv2[l]*w[l], 0.00000001))
+        Nobs_juv_pred[l] ~ dpois(max(py_j[pop_index[l],year_index[l]]*Njuv2[l]*w[l], 0.00000001))
+      }#l
+      
+      # Part 5: Model Checking
+      
+        # Part 5.1: Fecundity
+      
+        for (l in 1:nfec) {
+          ft_fec_data1[l] <- (sqrt(Nobs_juv2[l])-sqrt(py_j[pop_index[l],year_index[l]]*Njuv2[l]*w[l]))^2
+          ft_fec_pred1[l] <- (sqrt(Nobs_juv_pred[l])-sqrt(py_j[pop_index[l],year_index[l]]*Njuv2[l]*w[l]))^2
+        }#l
+      
+        ft_fec_data2 <- sum(ft_fec_data1[])
+        ft_fec_pred2 <- sum(ft_fec_pred1[])
+      
+        pvalue_fec <- step(ft_fec_pred2-ft_fec_data2)
+      
+        # Part 5.2: Capture History
+      
+        for (i in 1:nind) {
+          ### The next two lines are adjustments for code to run
+          ### They don't affect the calculation of Freeman-Tukey statistic
+          p[i,first[i],first_sub[i]] <- 1
+          start[i] <- ifelse(first_sub[i]==nsub, nsub, first_sub[i]+1)
+      
+          ts[i] <- (sqrt(sum(y[i,first[i],start[i]:nsub])) - 
+                    sqrt(sum(p[i,first[i],start[i]:nsub])))^2
+          ft1_data[i,first[i]] <- ifelse(first_sub[i]==nsub, 0, ts[i])
+      
+          ts_pred[i] <- (sqrt(sum(y_pred[i,first[i],start[i]:nsub])) - 
+                         sqrt(sum(p[i,first[i],start[i]:nsub])))^2
+          ft1_pred[i,first[i]] <- ifelse(first_sub[i]==nsub, 0, ts_pred[i])
+      
+          for (t in (first[i]+1):(last_pop[pop[i]])) {
+            ft1_data[i,t] <- (sqrt(sum(y[i,t,])) - sqrt(z[i,t]*sum(p[i,t,])))^2
+            ft1_pred[i,t] <- (sqrt(sum(y_pred[i,t,])) - sqrt(z[i,t]*sum(p[i,t,])))^2
+          }#t
+      
+          ft2_data[i] <- sum(ft1_data[i,first[i]:last_pop[pop[i]]])
+          ft2_pred[i] <- sum(ft1_pred[i,first[i]:last_pop[pop[i]]])
+      }#i
+      
+      ft3_data <- sum(ft2_data[])
+      ft3_pred <- sum(ft2_pred[])
+      
+      pvalue_ch <- step(ft3_pred-ft3_data)
+      
+      }
