@@ -2,9 +2,9 @@
 
 This document explains the R scripts used in Şen and Akçakaya (2019), which describes CJS-pop, applies it to simulated and MAPS data, and uses the estimated parameters for population projections. 
 
-The code in general are presented as "notebooks" which R Markdown files. You can knit the whole file or you can run the code chunks seperately. Each notebook includes detailed notes about the code for data wrangling and analysis.
+The code in general are presented as "notebooks" which are R Markdown files. You can knit the whole file or you can run the code chunks seperately. Each notebook includes detailed notes about the code for data wrangling and analysis.
 
-We can't share MAPS data. Brow Creeper analysis code will not work unless you have access full MAPS data. However, we share an example analysis with simulated data under **sim_example_CJSpop_run**. Clone the repository and run **sim_models_notebook.rmd** generate the .jags files. Then run **sim_example_CJSpop_run** to obtain example results.
+We can't share MAPS data. Brow Creeper analysis code will not work unless you have access to full MAPS data. However, we share an example analysis with simulated data under **sim_example_CJSpop_run**. Clone the repository and run **sim_models_notebook.rmd** generate the .jags files. Then run **sim_example_CJSpop_run** to obtain example results.
 
 If you have access to data the main analysis has three parts: MAPS, Simulations, and Projections and Plotting.
 
