@@ -1,6 +1,6 @@
 # CJS-pop
 
-This document explains the R scripts used in Şen and Akçakaya (2019), which describes CJS-pop, applies it to simulated and MAPS data, and uses the estimated parameters for population projections. 
+This document explains the R scripts used in Şen and Akçakaya (in review), which describes CJS-pop, applies it to simulated and MAPS data, and uses the estimated parameters for population projections. 
 
 The code in general are presented as "notebooks" which are R Markdown files. You can knit the whole file or you can run the code chunks seperately. Each notebook includes detailed notes about the code for data wrangling and analysis.
 
@@ -18,7 +18,7 @@ Run **brcr_models.R** to apply 4 different mark-recapture models (3 different IR
 
 ## 2. Simulations
 
-Run **data_generation_notebook.rmd** to simulate capture history data as explained in Şen and Akçakaya (2019). 
+Run **data_generation_notebook.rmd** to simulate capture history data as explained in Şen and Akçakaya (in review). 
 
 Run **sim_models_notebook.rmd** to generate the .jags files used in applying CJS-pop to simulated data. Easiest way is to knit the whole notebook.
 
