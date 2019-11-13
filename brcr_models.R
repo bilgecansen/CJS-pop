@@ -78,7 +78,7 @@ jags.func <- function(model, chdata, ni, nb, nc, nt) {
   
   params <- c("survival_ad", "survival_juv", "beta", "gamma", "delta",
               "fecundity", "zeta", "pi", "rho", "sigma_f", "psi",
-              "sigma_s", "pvalue_ch", "pvalue_fec")
+              "sigma_s", "pvalue_ch", "pvalue_fec", "Njuv2")
   
   data <- list(y = chdata$ch_robust,
                z = chdata$latent_state,
