@@ -7,8 +7,8 @@
 
         survival_ad ~ dunif(0,1)
         survival_juv <- (1-survival_ad)/fecundity
-        alpha_rev[1] <- logit(survival_ad)
-        alpha_rev[2] <- logit(survival_juv)
+        alpha[2] <- logit(survival_ad)
+        alpha[1] <- logit(survival_juv)
         beta ~ dt(0,pow(10,-2),1)
         sigma_s ~ dt(0,pow(10,-2),1)T(0,)
         tau_s <- 1/(sigma_s^2)
@@ -19,8 +19,8 @@
 
         # Part 1.2: Priors for capture porbablity model
 
-        gamma_rev[1] ~ dt(0,pow(10,-2),1)
-        gamma_rev[2] ~ dt(0,pow(10,-2),1)
+        gamma[1] ~ dt(0,pow(10,-2),1)
+        gamma[2] ~ dt(0,pow(10,-2),1)
         delta ~ dt(0,pow(2.5,-2),1)
       
         # Part 1.3: Priors for fecundity model
@@ -38,22 +38,10 @@
         
         # Part 1.4: Priors for residency model
       
-        pi_rev[1] ~ dunif(0,1)
-        pi_rev[2] ~ dunif(0,1)
-        rho_rev[1] ~ dunif(0,1)
-        rho_rev[2] ~ dunif(0,1)
-
-        # Part 1.5: Setting up reverse subsetting. See above text for explanation.
-        
-        alpha[1] <- alpha_rev[2]
-        alpha[2] <- alpha_rev[1]
-        gamma[1] <- gamma_rev[2]
-        gamma[2] <- gamma_rev[1]
-        pi[1] <- pi_rev[2]
-        pi[2] <- pi_rev[1]
-        rho[1] <- rho_rev[2]
-        rho[2] <- rho_rev[1]
-
+        pi[1] ~ dunif(0,1)
+        pi[2] ~ dunif(0,1)
+        rho[1] ~ dunif(0,1)
+        rho[2] ~ dunif(0,1)
 
       # Part 2: Robust design mark-recapture model
 

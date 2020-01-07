@@ -13,14 +13,12 @@ JAGS language is not very versatile and seemingly straightforward task in other 
 
 1. **Fastening the loops**. For each population, models run only from the first year to the last year an individual was captured in that population. So while the whole study as a whole is between 1992 to 2008, that is not the case for most populations. Survival and capture history models are conditioned on the first capture of an individual but end at the last year of the individual's population, not necessarily extending to 2008. Population size and density are only estimated between first and last year of captures of each population. This way loops do not extend unnecessarily into early or late years with no capture effort in populations.
 
-2. **Reverse stage subsetting (Part 1)**. Per population modelling standards N1 and N2 should be juvenile and adult population sizes, respectively. To be compatible with this standard we denote juveniles 1 and adults 2. This is used in the code below to subset parameters for example alpha[1] and alpha[2] are juvenile and adult survial, respectively. However, if we give priors directly to parameters that change with stage the model convergence take longer. If however we first assing priors to reverse versions of these parameters, as in alpha_rev[1] is adult survival, and then assign their values to the actual parameters model convergence becomes faster and achived easier. We do not know why this is so. 
-
-3. **Imputing missing data (Part 3.2)**. As explained above density is estimated before the first year of capture or after the last year of capture in a population. However between first and last years there might still be years with no capture effort, and hence 0 capture probablity and 0 captured individuals, making the estimation of true population size impossible. We impute these years with a density value of 1. We are assuming that the population is stable and is at carrying capacity in years with no available infornation. 
+2. **Imputing missing data (Part 3.2)**. As explained above density is estimated before the first year of capture or after the last year of capture in a population. However between first and last years there might still be years with no capture effort, and hence 0 capture probablity and 0 captured individuals, making the estimation of true population size impossible. We impute these years with a density value of 1. We are assuming that the population is stable and is at carrying capacity in years with no available infornation. 
 Due to the asymptotical structure of logistic regression we never estimate 0 capture probablity even when there is no effort, but rather a number too low. This can be an issue when calculating average population size because of the correction we do when estimating the true popualtion size (see **reference**), and can lead to abnormally large population size estimates when there is no capture effort. To circumvent this issue we impute years with no capture effort with a population size of 0. This does not bias density estimates because only years with capture effort are considered when estimating density, as explained below.     
 
-4. **Density Estimation (Part 3.2)**. When estimating density we only consider years when there is capture effort. We count these years in a matrix called "n1", whose rows are populations and columns are years. We use the equal function to see if the total capture effort is equal to 0 (no capture effort), and if it is, equal function assings 1 to the corresponding matrix element, or 0 if it is not. Summing across a single row of the n1 matrix (between first and last capture years) counts the number of years with no effort. We substract this number from the range of years (last year - first year + 1) in that population to count the total number of years with capture effort in a population. This information is assigned to the vector "n2". Total population size is divided by n2 to calcualte average population size across years, which in turn used to estimate density in each year in each population.
+3. **Density Estimation (Part 3.2)**. When estimating density we only consider years when there is capture effort. We count these years in a matrix called "n1", whose rows are populations and columns are years. We use the equal function to see if the total capture effort is equal to 0 (no capture effort), and if it is, equal function assings 1 to the corresponding matrix element, or 0 if it is not. Summing across a single row of the n1 matrix (between first and last capture years) counts the number of years with no effort. We substract this number from the range of years (last year - first year + 1) in that population to count the total number of years with capture effort in a population. This information is assigned to the vector "n2". Total population size is divided by n2 to calcualte average population size across years, which in turn used to estimate density in each year in each population.
 
-5. **Indexing Fecundity Data (Part 4)**. We filter fecundity data so that only years and populations that have at least 1 adult and 1 juvenile captures are included in the final data. This means that some years and populations will be missing from this data, so fecundity model can not be covered with a regular for loop across years and populations. Instead we use two vectors "pop_index"" and "year_index" that specifies which element in the fecundity data, itself also a vector, belongs to which population and year. This way a single for loop can loop through the fecundity data, pop_index, and year_index while still subsetting correct elements in the density matrix with pop_index and year_index.
+4. **Indexing Fecundity Data (Part 4)**. We filter fecundity data so that only years and populations that have at least 1 adult and 1 juvenile captures are included in the final data. This means that some years and populations will be missing from this data, so fecundity model can not be covered with a regular for loop across years and populations. Instead we use two vectors "pop_index"" and "year_index" that specifies which element in the fecundity data, itself also a vector, belongs to which population and year. This way a single for loop can loop through the fecundity data, pop_index, and year_index while still subsetting correct elements in the density matrix with pop_index and year_index.
 
 
 ### 1. Density dependent CJS-pop with residents
@@ -38,8 +36,8 @@ sink("cjspop.jags")
 
         survival_ad ~ dunif(0,1)
         survival_juv <- (1-survival_ad)/fecundity
-        alpha_rev[1] <- logit(survival_ad)
-        alpha_rev[2] <- logit(survival_juv)
+        alpha[2] <- logit(survival_ad)
+        alpha[1] <- logit(survival_juv)
         beta ~ dt(0,pow(10,-2),1)
         sigma_s ~ dt(0,pow(10,-2),1)T(0,)
         tau_s <- 1/(sigma_s^2)
@@ -50,8 +48,8 @@ sink("cjspop.jags")
 
         # Part 1.2: Priors for capture porbablity model
 
-        gamma_rev[1] ~ dt(0,pow(10,-2),1)
-        gamma_rev[2] ~ dt(0,pow(10,-2),1)
+        gamma[1] ~ dt(0,pow(10,-2),1)
+        gamma[2] ~ dt(0,pow(10,-2),1)
         delta ~ dt(0,pow(2.5,-2),1)
       
         # Part 1.3: Priors for fecundity model
@@ -69,22 +67,10 @@ sink("cjspop.jags")
         
         # Part 1.4: Priors for residency model
       
-        pi_rev[1] ~ dunif(0,1)
-        pi_rev[2] ~ dunif(0,1)
-        rho_rev[1] ~ dunif(0,1)
-        rho_rev[2] ~ dunif(0,1)
-
-        # Part 1.5: Setting up reverse subsetting. See above text for explanation.
-        
-        alpha[1] <- alpha_rev[2]
-        alpha[2] <- alpha_rev[1]
-        gamma[1] <- gamma_rev[2]
-        gamma[2] <- gamma_rev[1]
-        pi[1] <- pi_rev[2]
-        pi[2] <- pi_rev[1]
-        rho[1] <- rho_rev[2]
-        rho[2] <- rho_rev[1]
-
+        pi[1] ~ dunif(0,1)
+        pi[2] ~ dunif(0,1)
+        rho[1] ~ dunif(0,1)
+        rho[2] ~ dunif(0,1)
 
       # Part 2: Robust design mark-recapture model
 
@@ -253,8 +239,8 @@ sink("cjspop_nores.jags")
 
         survival_ad ~ dunif(0,1)
         survival_juv <- (1-survival_ad)/fecundity
-        alpha_rev[1] <- logit(survival_ad)
-        alpha_rev[2] <- logit(survival_juv)
+        alpha[2] <- logit(survival_ad)
+        alpha[1] <- logit(survival_juv)
         beta ~ dt(0,pow(10,-2),1)
         sigma_s ~ dt(0,pow(10,-2),1)T(0,)
         tau_s <- 1/(sigma_s^2)
@@ -265,8 +251,8 @@ sink("cjspop_nores.jags")
 
         # Part 1.2: Priors for capture porbablity model
 
-        gamma_rev[1] ~ dt(0,pow(10,-2),1)
-        gamma_rev[2] ~ dt(0,pow(10,-2),1)
+        gamma[1] ~ dt(0,pow(10,-2),1)
+        gamma[2] ~ dt(0,pow(10,-2),1)
         delta ~ dt(0,pow(2.5,-2),1)
       
         # Part 1.3: Priors for fecundity model
@@ -281,13 +267,6 @@ sink("cjspop_nores.jags")
         for (l in 1:nfec) {
           omega[l] ~ dnorm(0, tau_f)
         }
-
-        # Part 1.4: Setting up reverse subsetting. See above text for explanation.
-        
-        alpha[1] <- alpha_rev[2]
-        alpha[2] <- alpha_rev[1]
-        gamma[1] <- gamma_rev[2]
-        gamma[2] <- gamma_rev[1]
 
       # Part 2: Robust design mark-recapture model
 
@@ -451,8 +430,8 @@ sink("cjspop_di.jags")
 
         survival_ad ~ dunif(0,1)
         survival_juv <- (1-survival_ad)/fecundity
-        alpha_rev[1] <- logit(survival_ad)
-        alpha_rev[2] <- logit(survival_juv)
+        alpha[2] <- logit(survival_ad)
+        alpha[1] <- logit(survival_juv)
         sigma_s ~ dt(0,pow(10,-2),1)T(0,)
         tau_s <- 1/(sigma_s^2)
 
@@ -462,8 +441,8 @@ sink("cjspop_di.jags")
 
         # Part 1.2: Priors for capture porbablity model
 
-        gamma_rev[1] ~ dt(0,pow(10,-2),1)
-        gamma_rev[2] ~ dt(0,pow(10,-2),1)
+        gamma[1] ~ dt(0,pow(10,-2),1)
+        gamma[2] ~ dt(0,pow(10,-2),1)
         delta ~ dt(0,pow(2.5,-2),1)
       
         # Part 1.3: Priors for fecundity model
@@ -480,21 +459,10 @@ sink("cjspop_di.jags")
         
         # Part 1.4: Priors for residency model
       
-        pi_rev[1] ~ dunif(0,1)
-        pi_rev[2] ~ dunif(0,1)
-        rho_rev[1] ~ dunif(0,1)
-        rho_rev[2] ~ dunif(0,1)
-
-        # Part 1.5: Setting up reverse subsetting. See above text for explanation.
-        
-        alpha[1] <- alpha_rev[2]
-        alpha[2] <- alpha_rev[1]
-        gamma[1] <- gamma_rev[2]
-        gamma[2] <- gamma_rev[1]
-        pi[1] <- pi_rev[2]
-        pi[2] <- pi_rev[1]
-        rho[1] <- rho_rev[2]
-        rho[2] <- rho_rev[1]
+        pi[1] ~ dunif(0,1)
+        pi[2] ~ dunif(0,1)
+        rho[1] ~ dunif(0,1)
+        rho[2] ~ dunif(0,1)
 
       # Part 2: Robust design mark-recapture model
 
