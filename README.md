@@ -26,6 +26,6 @@ We analysied the simulated data sets using the high performance comuputing clust
 
 ## 3. Projections and Plotting
 
-The plots and population projections in Şen and Akçakaya et al. (2019) can be reproduced with **Plots.R**. Change the working directory in the begining of the document as necessary. 
+The plots and population projections in Şen and Akçakaya (in review) can be reproduced with **Plots.R**. Change the working directory in the begining of the document as necessary. 
 
 
