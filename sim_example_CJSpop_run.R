@@ -2,7 +2,6 @@
 # Example script to run CJS-pop on simulated data
 
 ## See sim_models_notebook for extended notes on model structure.
-## sim_models_notebook also creates additional directories.
 
 rm(list = ls())
 
@@ -10,7 +9,7 @@ rm(list = ls())
 
 ## Code uses parallel computing. 
 ## set cores to 1 if not sure about the number of cores 
-cores <- 7
+cores <- 1
 
 ## Iterations of MCMC
 ni <- 50000 
@@ -26,18 +25,20 @@ nc <- 4
 ## Thinning
 nt <- 20
 
-
 # Load packages -----------------------------------------------------------
 
 library(rjags)
 library(R2jags)
 library(MCMCvis)
 library(magrittr)
+library(tictoc)
+library(doSNOW)
+library(foreach)
 
 
 # Load data and set up jags functions -------------------------------------
 
-chdata <- readRDS("chdata_m_p10_k150.rds")
+chdata <- readRDS("chdata_sim_example.rds")
 
 # ch.init function initilizes values for the latent state z, using the latent_state matrix (see
 # data_generation notebook for the creation of this matrix). NA values in the latent state is given
@@ -59,12 +60,12 @@ jags.func <- function(chdata, ni, nb, nc, nt) {
   
   init.func <- function() {
     list(survival_ad = runif(1,0,1),
-         beta = rnorm(1,0,10),
+         beta = rnorm(1,0,1),
          gamma = rnorm(2,0,10),
-         fecundity = runif(1,1,10),
-         zeta = rnorm(1,0,3),
-         sigma_s = runif(1,0,5),
-         sigma_f = runif(1,0,5),
+         fecundity = runif(1,1,5),
+         zeta = rnorm(1,0,1),
+         sigma_s = runif(1,0,1),
+         sigma_f = runif(1,0,1),
          z = ch.init(chdata$latent_state, chdata$first, 
                      chdata$last_pop, chdata$pop))
   }
@@ -84,6 +85,7 @@ jags.func <- function(chdata, ni, nb, nc, nt) {
                stage = chdata$stage,
                first = chdata$first,
                first_pop = chdata$first_pop,
+               last_pop = chdata$last_pop,
                first_sub = chdata$first_sub,
                nind = chdata$nind,
                nyear = chdata$nyear,
@@ -112,14 +114,19 @@ jags.func <- function(chdata, ni, nb, nc, nt) {
 cl <- makeCluster(cores, types = "SOCK")
 registerDoSNOW(cl)
 
-system.time({
-  results <- foreach(i=1:length(chdata), .packages = c("rjags", "R2jags")) %dopar% {
-    setwd(code_directory)
-    jags.func(chdata[[i]], ni = ni, nb = nb, nc = nc, nt = nt)
-  }
-})
+tic()
+results <- foreach(i=1:2, .packages = c("rjags", "R2jags")) %dopar% {
+  jags.func(chdata[[i]], ni = ni, nb = nb, nc = nc, nt = nt)
+}
+toc()
 
 stopCluster(cl)
 
-if (!"results" %in% list.files()) dir.create("results")
-saveRDS(results, "ddresults_h_p10_k150.rds")
+saveRDS(results, "results_sim_example.rds")
+
+
+# Summarize Results -------------------------------------------------------
+
+results_sum <- lapply(results, MCMCsummary)
+
+

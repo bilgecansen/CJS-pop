@@ -73,7 +73,7 @@ cat(
         
       z[i,first[i]] ~ dbern(1)
       
-      for (t in first[i]:(last_pop[i]-1)) {
+      for (t in first[i]:(last_pop[pop[i]]-1)) {
         phi[i,t] <- ilogit(alpha[stage[i,t]] + beta*(density[pop[i],t]-1) + epsilon[pop[i],t])
         z[i,t+1] ~ dbern(phi[i,t]*z[i,t])
       }#t
@@ -89,7 +89,7 @@ cat(
         y.pred[i,first[i],h] ~ dbern(z[i,first[i]]*p[i,first[i],h])
       }#h
       
-      for (t in first[i]:(last_pop[i]-1)) {
+      for (t in first[i]:(last_pop[pop[i]]-1)) {
         for(h in 1:nsub) {
           p[i,t+1,h] <- ilogit(gamma[stage[i,t+1]])
           y[i,t+1,h] ~ dbern(z[i,t+1]*p[i,t+1,h])
@@ -189,8 +189,6 @@ sink()
 ### 2. Density independent model
 
 ```{r, message=FALSE}
-setwd(code_directory)
-
 {
 sink("di_model_sim.jags")
 cat(

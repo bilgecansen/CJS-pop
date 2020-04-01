@@ -17,7 +17,6 @@ library(abind)
 library(boot)
 library(tidyverse)
 
-if (!"data" %in% list.files()) dir.create(data_directory)
 ```
 
 
@@ -103,13 +102,13 @@ setup.sim <- function(K, npop, time) {
 ```
 
 
-#### Function 3: simulate_state
+#### Function 3: simulate.state
 
 **sv**: starting values setup with **setup.sim** function.
 
-**alpha1**: Adult survival in logit scale when density is 0.
+**alpha1**: Juvenile survival in logit scale when density is 0.
 
-**alpha2**: Juvenile survival in logit scale when density is 0.
+**alpha2**: Adult survival in logit scale when density is 0.
 
 **beta**: Density dependence strength of survival in logit scale.
 
@@ -150,7 +149,7 @@ simulate.state <- function(sv, alpha1, alpha2, beta, zeta, sigma_s, sigma_f) {
   s.ad <- matrix(nrow = npop, ncol = time)
   s.juv <- matrix(nrow = npop, ncol = time)
   f <- matrix(nrow = npop, ncol = time)
-  theta <- log((1-(inv.logit(alpha1 + beta)))/(inv.logit(alpha2 + beta))) - zeta
+  theta <- log((1-(inv.logit(alpha2 + beta)))/(inv.logit(alpha1 + beta))) - zeta
   
   # Main loop
   for (t in 1:(time-1)) {
@@ -161,8 +160,8 @@ simulate.state <- function(sv, alpha1, alpha2, beta, zeta, sigma_s, sigma_f) {
       epsilon <- rnorm(1, 0, sigma_s)
       omega <- rnorm(1, 0, sigma_f)
       
-      s.ad[p,t] <- inv.logit(alpha1 + beta*Ntotal[p,t]/K[p] + epsilon)
-      s.juv[p,t] <- inv.logit(alpha2 + beta*Ntotal[p,t]/K[p] + epsilon)
+      s.ad[p,t] <- inv.logit(alpha2 + beta*Ntotal[p,t]/K[p] + epsilon)
+      s.juv[p,t] <- inv.logit(alpha1 + beta*Ntotal[p,t]/K[p] + epsilon)
       
       # Survival
       z.ad[[p]] <- survive(z.ad[[p]], t, s.ad[p,t])
@@ -523,8 +522,8 @@ for (j in 1:length(pop)) {
     
       for (i in 1:n_iter) {
         state[[i]] <- simulate.state(sv = sv,
-                                     alpha1 = 1,
-                                     alpha2 = 0.5,
+                                     alpha2 = 1,
+                                     alpha1 = 0.5,
                                      beta = dd[d],
                                      zeta = dd[d],
                                      sigma_s = 0.5,
@@ -565,4 +564,38 @@ for (j in 1:length(pop)) {
   }
 }
 ```
+
+#### Simulation example data
+
+```{r}
+
+sv <- setup.sim(npop = 10, time = 17, K = 150)
+    
+state <- list()
+ch <- list()
+chdata <- list()
+
+for (i in 1:2) {
+  
+        state[[i]] <- simulate.state(sv = sv,
+                                     alpha2 = 1,
+                                     alpha1 = 0.5,
+                                     beta = -0.5,
+                                     zeta = -0.5,
+                                     sigma_s = 0.5,
+                                     sigma_f = 0.5)
+
+        ch[[i]] <- simulate.ch(state[[i]],
+                               p.ad = 0.10,
+                               p.juv = 0.02)
+
+        chdata[[i]] <- wrap.chdata(ch[[i]], state[[i]])
+}
+
+saveRDS(chdata, file = "chdata_sim_example.rds")
+
+```
+
+
+
 
