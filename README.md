@@ -14,7 +14,7 @@ Run the **brcr_data_wrangling_notebook.rmd** to prepare Brown Creeper MAPS data 
 
 Run **brcr_models_notebook.rmd** to generate the .jags files used in applying CJS-pop to BRCR capture history data. Easiest way is to knit the whole notebook.
 
-Run **brcr_models.R** to apply 4 different mark-recapture models (3 different IRMs and one CJS) to Brown Creeper capture history data. These results are also available in the file **BRCR_results.rds**.
+Run **brcr_models.R** to apply 4 different mark-recapture models (3 different CJS-pops and one CJS) to Brown Creeper capture history data. These results are also available in the file **BRCR_results.rds**.
 
 ## 2. Simulations
 
