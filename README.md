@@ -18,7 +18,7 @@ Run **brcr_models.R** to apply 4 different mark-recapture models (3 different CJ
 
 ## 2. Simulations
 
-Run **data_generation_notebook.rmd** to simulate capture history data as explained in Şen and Akçakaya (in review). 
+Run **data_generation_notebook.rmd** to simulate capture history data as explained in Şen and Akçakaya (2020). 
 
 Run **sim_models_notebook.rmd** to generate the .jags files used in applying CJS-pop to simulated data. Easiest way is to knit the whole notebook.
 
