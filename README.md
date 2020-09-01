@@ -1,6 +1,6 @@
 # CJS-pop
 
-This document explains the R scripts used in Şen and Akçakaya (in review), which describes CJS-pop, applies it to simulated and MAPS data, and uses the estimated parameters for population projections. 
+This document explains the R scripts used in Şen and Akçakaya (2020; available as preprint also under review in Ecology), which describes CJS-pop, applies it to simulated and MAPS data, and uses the estimated parameters for population projections. 
 
 The code in general are presented as "notebooks" which are R Markdown files. You can knit the whole file or you can run the code chunks seperately. Each notebook includes detailed notes about the code for data wrangling and analysis.
 
@@ -26,6 +26,10 @@ We analysied the simulated data sets using the high performance comuputing clust
 
 ## 3. Projections and Plotting
 
-The plots and population projections in Şen and Akçakaya (in review) can be reproduced with **Plots.R**. 
+The plots and population projections in Şen and Akçakaya (in review) can be reproduced with **Plots.R**.
+
+## Preprint
+Şen, B., and H. R. Akçakaya. 2020. Estimating fecundity and density dependence from mark-recapture data for making population projections. bioRxiv:2020.08.26.268656. https://www.biorxiv.org/node/1501472.external-links.html
+
 
 
