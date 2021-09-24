@@ -686,10 +686,10 @@ ema_data2 <- data.frame(ema = c(ema_mapsdd, ema_mapsdi),
 ema_data <- rbind(ema_data1,ema_data2)
 ema_data$dd_strength <- factor(ema_data$dd_strength,
                                levels = c("BRCR","Weak", "Moderate", "Strong"))
-levels(ema_data$dd_strength) <-  c("a) MAPS: BRCR",
-                                   "b) Simulations: Weak DD", 
-                                   "c) Simulations: Moderate DD", 
-                                   "d) Simulations: Strong DD")
+levels(ema_data$dd_strength) <-  c("A) MAPS: BRCR",
+                                   "B) Simulations: Weak DD", 
+                                   "C) Simulations: Moderate DD", 
+                                   "D) Simulations: Strong DD")
 
 ema_plot <- ggplot(ema_data, aes(x = ema)) + 
   geom_density(aes(fill = type), alpha = 0.5)
@@ -701,7 +701,7 @@ ema_plot + facet_wrap(~dd_strength, nrow = 4, scales = "free_y") +
   theme(legend.position = "bottom",
         axis.title = element_text(size = 12))
 
-ggsave("fig4.tiff", width = 8, height = 8, units = "in")
+ggsave("fig4.jpeg", width = 8, height = 8, units = "in")
 
 # Tables for BRCR ---------------------------------------------------------
 
