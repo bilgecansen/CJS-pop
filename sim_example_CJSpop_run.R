@@ -1,5 +1,5 @@
 
-# Example script to run CJS-pop on simulated data
+# Example script to run RD-pop on simulated data
 
 ## See sim_models_notebook for extended notes on model structure.
 

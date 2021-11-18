@@ -1,13 +1,14 @@
 ---
 title: "CJS-pop models for MAPS Data"
 output:
+  pdf_document: default
   html_document:
     df_print: paged
 ---
 
 ### Introduction
 
-CJS-pop models for analysing capture history data from the MAPS program. See this **Sen and Akcakaya (in review)** for detailed model description.
+RF-pop models for analyzing capture history data from the MAPS program.
 
 JAGS language is not very versatile and seemingly straightforward tasks in other languages may require a few extre lines in JAGS. Here we explain some of the programming tricks we used in the models below.
 
@@ -21,7 +22,7 @@ On a similar note, rue to the asymptotical structure of logistic regression we n
 
 4. **Indexing Fecundity Data (Part 4)**. We filter fecundity data so that only years and populations that have at least 1 adult are included in the final data. This means that some years and populations will be missing from this data, so fecundity model can not be covered with a regular "for loop" across years and populations. Instead we use two vectors "pop_index"" and "year_index" that specifies which element in the fecundity data, itself also a vector, belongs to which population and year. This way a single "for loop" can loop through the fecundity data, pop_index, and year_index while still subsetting correct elements in the density matrix with pop_index and year_index.
 
-The first model below corresponds to the model presented in **Sen and Akcakaya(in review)**. Rest of the models are similar in structure with different variations and sometimes with different tricks. We do not explain those in detail. 
+The first model below corresponds to the model presented in **Sen and Akcakaya (2021)**. Rest of the models are similar in structure with different variations and sometimes with different tricks. We do not explain those in detail. 
 
 ### 1. Density dependent CJS-pop with residents
 

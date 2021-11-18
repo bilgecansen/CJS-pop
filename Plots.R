@@ -1,4 +1,3 @@
-### Graphs for Şen and Akçakaya (in review) ###
 
 rm(list = ls())
 
@@ -165,7 +164,7 @@ sim_params_dd <- data.frame(est = c(-0.05, -0.5, -1),
 theme_set(theme_bw())
 jitter <- position_jitter(width = 0.1, height = 0.1)
 
-# Figure 2
+# Figure 3
 dd_data <- filter(sum_data_dd2, (par == "DD(lgt)" | par == "DD(log)") 
                   & pop == "Pop = 10" & K == "K = 150")
 dd_data$par <- recode_factor(dd_data$par, "DD(lgt)" = "Survival", "DD(log)" = "Fecundity")
@@ -175,7 +174,7 @@ p_dd <- ggplot(dd_data, aes(dd, est, color = stat)) +
   geom_point(data = sim_params_dd, size = 8, col = "black", shape = "+")
 
 p_dd + facet_wrap(~ par, ncol = 3, nrow = 2, scales = "free_y") +
-  labs(y = "CJS-pop DD Estimates", x = "Simulated DD Strength") +
+  labs(y = "RD-pop DD Estimates", x = "Simulated DD Strength") +
   scale_color_manual(name ="Posterior Statistics",
                      breaks = c("2.5%", "97.5%","mean"),
                      labels = c("2.5%", "97.5%","Mean"),
@@ -185,9 +184,9 @@ p_dd + facet_wrap(~ par, ncol = 3, nrow = 2, scales = "free_y") +
         legend.text = element_text(size = 12),
         legend.position = "bottom")
 
-ggsave("fig2.tiff", width = 6, height = 6, units = "in")
+ggsave("fig3.jpeg", width = 6, height = 6, units = "in")
 
-# Figure S1-4
+# Figure S1
 sum_data_dd3 <- sum_data_dd2
 sum_data_dd3$dd <- as.factor(sum_data_dd3$dd)
 levels(sum_data_dd3$dd) <- c("Weak DD", "Moderate DD", "Strong DD")
@@ -211,6 +210,7 @@ p_sur + facet_wrap(~ dd, nrow = 3, scales = "fixed") +
 
 ggsave("figS1.tiff", width = 6, height = 8, units = "in")
 
+# Figure not in manuscript
 p_dd <- ggplot(filter(sum_data_dd3, 
                        pop == "Pop = 10" & K == "K = 150" & stat == "mean" & 
                          par %in% c("DD(lgt)", "DD(log)")), 
@@ -226,6 +226,7 @@ p_dd + facet_wrap(~ dd, nrow = 3, scales = "fixed") +
 
 ggsave("figS2.tiff", width = 6, height = 8, units = "in")
 
+# Figure S2
 p_sig <- ggplot(filter(sum_data_dd3, 
                       pop == "Pop = 10" & K == "K = 150" & stat == "mean" & 
                         par %in% c("SD(lgt)", "SD(log)")), 
@@ -241,6 +242,7 @@ p_sig + facet_wrap(~ dd, nrow = 3, scales = "fixed") +
 
 ggsave("figS3.tiff", width = 6, height = 8, units = "in")
 
+# Figure 2
 p_fec <- ggplot(filter(sum_data_dd3, 
                       pop == "Pop = 10" & K == "K = 150" & stat == "mean" & 
                         par == "Fec"), 
@@ -253,9 +255,9 @@ p_fec + facet_wrap(~ dd, ncol = 3, scales = "fixed") +
   theme(axis.text.x = element_blank(),
         axis.title = element_text(size = 14))
 
-ggsave("figS4.tiff", width = 8, height = 6, units = "in")
+ggsave("fig2.jpeg", width = 8, height = 6, units = "in")
 
-# Figure S2
+# Figure S3
 p_beta <- ggplot(filter(sum_data_dd2, par == "DD(lgt)"), aes(dd, est, color = stat)) +
   geom_jitter(position = jitter, size = 1, shape = 1) +
   geom_point(data = sim_params_dd, size = 8, col = "black", shape = "+")
@@ -273,7 +275,7 @@ p_beta + facet_wrap(~ pop + K, ncol = 3, nrow = 3, scales = "free_y") +
 
 ggsave("figS2.tiff", width = 8, height = 8, units = "in")
 
-# Figure S3
+# Figure S4
 p_zeta <- ggplot(filter(sum_data_dd2, par == "DD(log)"), aes(dd, est, color = stat)) +
   geom_jitter(position = jitter, size = 1, shape = 1) +
   geom_point(data = sim_params_dd, size = 8, col = "black", shape = "+")
@@ -646,8 +648,7 @@ h_di <- apply(Ntotal_mapsdi, 2, function(x) quantile(x, 0.775, na.rm = T))
 l_di <- apply(Ntotal_mapsdi, 2, function(x) quantile(x, 0.225, na.rm = T))
 ema_mapsdi <- apply(Ntotal_mapsdi, 1, min, na.rm = T)
 
-# Fig 3
-
+# Fig S5
 med_data <- data.frame(med = c(med_dd, med_di),
                        ll = c(l_dd, l_di),
                        hl= c(h_dd, h_di),
@@ -668,10 +669,9 @@ g_s <- plot_grid(g_sad, g_fec, ncol = 2, labels = c("a", "b"))
 plot_grid(g_s, med_plot2, nrow = 2, rel_heights = c(0.6, 1, 1), 
           labels = c("", "c"))
 
-ggsave("fig3.tiff", width = 8, height = 8, units = "in")
+ggsave("figS5.tiff", width = 8, height = 8, units = "in")
 
 # Fig 4
-
 ema_data1 <- data.frame(ema = c(ema_dd_l,ema_dd_m,ema_dd_h,
                                 ema_di_l,ema_di_m,ema_di_h,
                                 ema_tr_l,ema_tr_m,ema_tr_h),

@@ -1,5 +1,5 @@
 
-# CJS-pop for Brown Creeper MAPS data
+# RD-pop for Brown Creeper MAPS data
 
 ## See brcr_models_notebook for extended notes on model structure.
 

@@ -7,7 +7,7 @@ output:
 
 ### Introduction
 
-Mark-recapture models for analysing simulated capture history data. These models are simplified versions of the models presented in maps_models_notebook. Simplifications are:
+Mark-recapture models for analyzing simulated capture history data. These models are simplified versions of the models presented in maps_models_notebook. Simplifications are:
 
 1. Single population.
 2. No spatial variance component.

@@ -1,6 +1,6 @@
-# CJS-pop
+# RD-pop
 
-This document explains the R scripts used in Şen and Akçakaya (2020; available as preprint also under review in Ecology), which describes CJS-pop, applies it to simulated and MAPS data, and uses the estimated parameters for population projections. 
+This document explains the R scripts used in Şen and Akçakaya (2021), which describes RF-pop, applies it to simulated and MAPS data, and uses the estimated parameters for population projections. During the review process at Ornithological Applications, the name of the framework was changed to RD-pop. However, some files names and the name of this repository remains as the old name, CJS-pop.  
 
 The code in general are presented as "notebooks" which are R Markdown files. You can knit the whole file or you can run the code chunks seperately. Each notebook includes detailed notes about the code for data wrangling and analysis.
 
@@ -10,15 +10,15 @@ If you have access to data, the main analysis has three parts: MAPS, Simulations
 
 ## 1. MAPS
 
-Run the **brcr_data_wrangling_notebook.rmd** to prepare Brown Creeper MAPS data for CJS-pop in JAGS.
+Run the **brcr_data_wrangling_notebook.rmd** to prepare Brown Creeper MAPS data for RD-pop in JAGS.
 
-Run **brcr_models_notebook.rmd** to generate the .jags files used in applying CJS-pop to BRCR capture history data. Easiest way is to knit the whole notebook.
+Run **brcr_models_notebook.rmd** to generate the .jags files used in applying RD-pop to BRCR capture history data. Easiest way is to knit the whole notebook.
 
-Run **brcr_models.R** to apply 4 different mark-recapture models (3 different CJS-pops and one CJS) to Brown Creeper capture history data. These results are also available in the file **BRCR_results.rds**.
+Run **brcr_models.R** to apply 4 different mark-recapture models (3 different RD-pops and one CJS) to Brown Creeper capture history data. These results are also available in the file **BRCR_results.rds**.
 
 ## 2. Simulations
 
-Run **data_generation_notebook.rmd** to simulate capture history data as explained in Şen and Akçakaya (2020). 
+Run **data_generation_notebook.rmd** to simulate capture history data as explained in Şen and Akçakaya (2021). 
 
 Run **sim_models_notebook.rmd** to generate the .jags files used in applying CJS-pop to simulated data. Easiest way is to knit the whole notebook.
 
@@ -26,10 +26,10 @@ We analysied the simulated data sets using the high performance comuputing clust
 
 ## 3. Projections and Plotting
 
-The plots and population projections in Şen and Akçakaya (in review) can be reproduced with **Plots.R**.
+The plots and population projections in Şen and Akçakaya (2021) can be reproduced with **Plots.R**.
 
-## Preprint
-Şen, B., and H. R. Akçakaya. 2020. Estimating fecundity and density dependence from mark-recapture data for making population projections. bioRxiv:2020.08.26.268656. https://www.biorxiv.org/node/1501472.external-links.html
+## Reference
+The full reference will be added when the manuscript is published in Ornithological Applications.
 
 
 
