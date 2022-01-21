@@ -1,6 +1,6 @@
 # RD-pop
 
-This document explains the R scripts used in Şen and Akçakaya (2021), which describes RF-pop, applies it to simulated and MAPS data, and uses the estimated parameters for population projections. During the review process at Ornithological Applications, the name of the framework was changed to RD-pop. However, some files names and the name of this repository remains as the old name, CJS-pop.  
+This document explains the R scripts used in Şen and Akçakaya (2022), which describes RF-pop, applies it to simulated and MAPS data, and uses the estimated parameters for population projections. During the review process at Ornithological Applications, the name of the framework was changed to RD-pop. However, some files names and the name of this repository remains as the old name, CJS-pop.  
 
 The code in general are presented as "notebooks" which are R Markdown files. You can knit the whole file or you can run the code chunks seperately. Each notebook includes detailed notes about the code for data wrangling and analysis.
 
@@ -26,7 +26,7 @@ We analysied the simulated data sets using the high performance comuputing clust
 
 ## 3. Projections and Plotting
 
-The plots and population projections in Şen and Akçakaya (2021) can be reproduced with **Plots.R**.
+The plots and population projections in Şen and Akçakaya (2022) can be reproduced with **Plots.R**.
 
 ## Reference
 Şen, B., & Akçakaya, H. R. (2022). Fecundity and density dependence can be estimated from mark–recapture data for making population projections. Ornithological Applications, 124(1). https://doi.org/10.1093/ornithapp/duab064
