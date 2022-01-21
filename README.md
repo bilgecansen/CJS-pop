@@ -29,7 +29,7 @@ We analysied the simulated data sets using the high performance comuputing clust
 The plots and population projections in Şen and Akçakaya (2021) can be reproduced with **Plots.R**.
 
 ## Reference
-Bilgecan Şen, H Reşit Akçakaya, Fecundity and density dependence can be estimated from mark–recapture data for making population projections, Ornithological Applications, 2021;, duab064, https://doi.org/10.1093/ornithapp/duab064
+Şen, B., & Akçakaya, H. R. (2022). Fecundity and density dependence can be estimated from mark–recapture data for making population projections. Ornithological Applications, 124(1). https://doi.org/10.1093/ornithapp/duab064
 
 
 
