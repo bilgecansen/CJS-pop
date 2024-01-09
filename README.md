@@ -1,6 +1,6 @@
 # RD-pop
 
-This document explains the R scripts used in Şen and Akçakaya (2022), which describes RF-pop, applies it to simulated and MAPS data, and uses the estimated parameters for population projections. During the review process at Ornithological Applications, the name of the framework was changed to RD-pop. However, some files names and the name of this repository remains as the old name, CJS-pop.  
+This document explains the R scripts used in Şen and Akçakaya (2022), which describes RD-pop, applies it to simulated and MAPS data, and uses the estimated parameters for population projections. During the review process at Ornithological Applications, the name of the framework was changed to RD-pop. However, some files names and the name of this repository remains as the old name, CJS-pop.  
 
 The code in general are presented as "notebooks" which are R Markdown files. You can knit the whole file or you can run the code chunks seperately. Each notebook includes detailed notes about the code for data wrangling and analysis.
 
