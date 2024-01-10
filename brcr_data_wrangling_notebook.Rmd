@@ -42,6 +42,8 @@ The master band file ("MAPS_9208.csv") was obtained from Kevin Shoemaker's forme
 band_data <- read.csv("MAPS_9208.csv") %>%
   filter(N %in% c("+", "-")) %>%
   filter(!is.na(BAND)) %>%
+  mutate(LOC = as.factor(LOC)) %>%
+  mutate(STATION = as.factor(STATION)) %>%
   mutate(pop = as.numeric(LOC)) %>%
   mutate(year = as.numeric(format.Date(DATE, "%Y")),
          month = as.numeric(format.Date(DATE, "%m")),
